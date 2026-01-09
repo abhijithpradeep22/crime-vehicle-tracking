@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+
+# Computer Vision & AI
+opencv-python
+numpy
+ultralytics
+easyocr
+scikit-learn
+
+# Database
+sqlalchemy
+
+# Utilities
+python-multipart
+pydantic
