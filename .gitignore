@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+
+# Environment variables
+.env
+
+# Data files
+data/videos/
+data/frames/
+data/snapshots/
+
+# Frontend
+node_modules/
+
+# OS files
+Thumbs.db
+.DS_Store
