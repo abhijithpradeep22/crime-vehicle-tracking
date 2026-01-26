@@ -4,7 +4,7 @@ class CameraBase(BaseModel):
     camera_id: str
     location: str
     latitude: float
-    logtitude: float
+    longitude: float
 
 class CameraCreate(CameraBase):
     pass 
