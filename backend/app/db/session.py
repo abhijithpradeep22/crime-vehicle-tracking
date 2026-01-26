@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from typing import Generator
 
-DATABASE_URL = "sqlite:///./crime_vehicle_tracking.db"
+DATABASE_URL = "sqlite:///backend/crime_vehicle_tracking.db"
 
 engine = create_engine(
     DATABASE_URL,
