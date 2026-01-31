@@ -1,18 +1,20 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from typing import Generator
+from pathlib import Path
 
-DATABASE_URL = "sqlite:///backend/crime_vehicle_tracking.db"
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+DATABASE_URL = f"sqlite:///{BASE_DIR}/crime_vehicle_tracking.db"
 
 engine = create_engine(
     DATABASE_URL,
-    connect_args = {"check_same_thread":False}
+    connect_args={"check_same_thread": False}
 )
 
 SessionLocal = sessionmaker(
-    autocommit = False,
-    autoflush = False,
-    bind = engine
+    autocommit=False,
+    autoflush=False,
+    bind=engine
 )
 
 def get_db() -> Generator:

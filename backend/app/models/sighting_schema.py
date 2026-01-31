@@ -4,7 +4,7 @@ from typing import Optional
 
 class SightingBase(BaseModel):
     case_id: int
-    camera_id: int
+    camera_id: str
     image_path: str
     vehicle_type: Optional[str] = None
     confidence: Optional[str] = None
