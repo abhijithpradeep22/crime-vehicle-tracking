@@ -1,7 +1,7 @@
 import cv2
 import os
-from collections import defaultdict
 import time
+
 from ultralytics import YOLO
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -10,6 +10,8 @@ from backend.app.db.session import SessionLocal
 from backend.app.models.camera import Camera
 from backend.app.models.case import InvestigationCase
 from backend.app.models.sighting import VehicleSighting
+from backend.app.workers.anpr import extract_plate
+
 
 model = YOLO("yolov8n.pt")
 
@@ -44,12 +46,6 @@ def process_video(
     os.makedirs("data/snapshots", exist_ok=True)
     frame_count = 0
 
-    last_seen_time = defaultdict(float)
-    MIN_GAP_SECONDS = 5
-
-    last_seen_position = []
-    DIST_THRESHOLD = 50
-
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -70,6 +66,10 @@ def process_video(
                 if cls_id not in VEHICLE_CLASSES:
                     continue
 
+                # Skip very low-confidence detections (OCR)
+                if float(box.conf[0]) < 0.5:
+                    continue
+
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
                 if x2 <= x1 or y2 <= y1:
@@ -88,48 +88,35 @@ def process_video(
                 if area < MIN_AREA:
                     continue
 
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
-
-                is_duplicate = False
-                for px, py in last_seen_position:
-                    if abs(cx - px) < DIST_THRESHOLD and abs(cy -py) < DIST_THRESHOLD:
-                        is_duplicate = True
-                        break
-                if is_duplicate:
-                    continue
-
                 crop = frame[y1:y2, x1:x2]
                 if crop.size == 0:
                     continue
 
-                filename = f"sighting_{case_id}_{camera_id}_{frame_count}.jpg"
-                image_path = os.path.join("data/snapshots", filename)
-
-                cv2.imwrite(image_path, crop)
+                plate_text, plate_conf = extract_plate(crop)
 
                 vehicle_type = model.names[cls_id]
-                key = (camera_id, vehicle_type)
-                current_time = time.time()
 
-                #skip recent detection
-                if current_time - last_seen_time[key] < MIN_GAP_SECONDS:
-                    continue
+                image_path = None
+                if plate_text:
 
-                last_seen_time[key] = current_time
-
+                    print(f"[ANPR] Plate detected: {plate_text} | Camera={camera_id} | Frame={frame_count}")
+                    filename = f"sighting_{case_id}_{camera_id}_{frame_count}_{cls_id}.jpg"
+                    image_path = os.path.join("data/snapshots", filename)
+                    cv2.imwrite(image_path, crop)
+                
                 sighting = VehicleSighting(
                     case_id = case_id,
                     camera_id = camera_id,
                     image_path = image_path,
                     vehicle_type = vehicle_type,
                     confidence = float(box.conf[0]),
+                    plate_number = plate_text,
+                    plate_confidence = plate_conf,
                     detected_at = datetime.utcnow()
                 )
 
                 db.add(sighting)
 
-        # optional safety commit
         if frame_count % 100 == 0:
             db.commit()
 
