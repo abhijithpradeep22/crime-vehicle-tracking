@@ -6,4 +6,4 @@ process_video(
     camera_id="CAM_001" 
 )
 
-print("YOLO processing finished")
+print("Completed")

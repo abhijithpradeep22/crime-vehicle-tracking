@@ -14,10 +14,13 @@ from backend.app.workers.anpr import extract_plate
 
 
 model = YOLO("yolov8n.pt")
+plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 
 # YOLO class IDs: car=2, motorbike=3, bus=5, truck=7
 VEHICLE_CLASSES = {2, 3, 5, 7}
 
+last_seen_plates = {}  # {(camera_id, plate_text): datetime}
+COOLDOWN_SECONDS = 5
 
 def process_video(
     video_path: str,
@@ -93,39 +96,70 @@ def process_video(
                 if vehicle_crop.size == 0:
                     continue
 
-                #Compute vehicle dimensions
-                h, w, _ = vehicle_crop.shape
+                plate_results = plate_model(vehicle_crop, conf = 0.4, verbose = False)
 
-                #Crop plate region
-                plate_crop = vehicle_crop[int(h*0.55):h, int(w*0.2):int(w*0.8)]
+                for pr in plate_results:
+                    if pr.boxes is None:
+                        continue
 
-                if plate_crop.size == 0:
-                    continue
+                    for pbox in pr.boxes:
+                        px1, py1, px2, py2 = map(int, pbox.xyxy[0])
+                        vh, vw = vehicle_crop.shape[:2]
 
-                plate_text, plate_conf = extract_plate(plate_crop)
+                        px1 = max(0, px1)
+                        py1 = max(0, py1)
+                        px2 = min(vw, px2)
+                        py2 = min(vh, py2)
 
-                vehicle_type = model.names[cls_id]
+                        if px2 - px1 < 20 or py2 - py1 < 10:
+                            continue
 
-                image_path = None
-                if plate_text:
+                        plate_crop = vehicle_crop[py1:py2, px1:px2]
+                        if plate_crop.size == 0:
+                            continue
 
-                    print(f"[ANPR] Plate detected: {plate_text} | Camera={camera_id} | Frame={frame_count}")
-                    filename = f"sighting_{case_id}_{camera_id}_{frame_count}_{cls_id}.jpg"
-                    image_path = os.path.join("data/snapshots", filename)
-                    cv2.imwrite(image_path, crop)
-                
-                sighting = VehicleSighting(
-                    case_id = case_id,
-                    camera_id = camera_id,
-                    image_path = image_path,
-                    vehicle_type = vehicle_type,
-                    confidence = float(box.conf[0]),
-                    plate_number = plate_text,
-                    plate_confidence = plate_conf,
-                    detected_at = datetime.utcnow()
-                )
 
-                db.add(sighting)
+                        plate_text, plate_conf = extract_plate(plate_crop)
+
+
+                        #print("OCR raw =>", plate_text, plate_conf) 
+
+                        if plate_text is None or plate_conf is None:
+                            continue
+
+                        if plate_conf < 0.45:
+                            continue
+
+                        now = datetime.utcnow()
+                        key = (camera_id, plate_text)
+
+                        if key in last_seen_plates:
+                            if(now - last_seen_plates[key]).total_seconds() < COOLDOWN_SECONDS:
+                                continue
+
+                        last_seen_plates[key] = now
+
+
+                        vehicle_type = model.names[cls_id]
+
+                        print(f"[ANPR] Plate detected: {plate_text} | Camera = {camera_id} | Frame = {frame_count}")
+
+                        filename = f"sighting_{case_id}_{camera_id}_{frame_count}_{cls_id}.jpg"
+                        image_path = os.path.join("data/snapshots", filename)
+                        cv2.imwrite(image_path, plate_crop)
+                        
+                        sighting = VehicleSighting(
+                            case_id = case_id,
+                            camera_id = camera_id,
+                            image_path = image_path,
+                            vehicle_type = vehicle_type,
+                            confidence = float(box.conf[0]),
+                            plate_number = plate_text,
+                            plate_confidence = float(plate_conf) if plate_conf is not None else 0.0,
+                            detected_at = now
+                        )
+
+                        db.add(sighting)
 
         if frame_count % 100 == 0:
             db.commit()
