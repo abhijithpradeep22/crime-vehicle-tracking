@@ -88,11 +88,21 @@ def process_video(
                 if area < MIN_AREA:
                     continue
 
-                crop = frame[y1:y2, x1:x2]
-                if crop.size == 0:
+                #Crop the detected vehicle
+                vehicle_crop = frame[y1:y2, x1:x2]
+                if vehicle_crop.size == 0:
                     continue
 
-                plate_text, plate_conf = extract_plate(crop)
+                #Compute vehicle dimensions
+                h, w, _ = vehicle_crop.shape
+
+                #Crop plate region
+                plate_crop = vehicle_crop[int(h*0.55):h, int(w*0.2):int(w*0.8)]
+
+                if plate_crop.size == 0:
+                    continue
+
+                plate_text, plate_conf = extract_plate(plate_crop)
 
                 vehicle_type = model.names[cls_id]
 
