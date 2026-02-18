@@ -2,12 +2,12 @@ import re
 from collections import Counter, defaultdict
 from sqlalchemy.orm import Session
 from backend.app.models.sighting import VehicleSighting
+from difflib import SequenceMatcher
+
 
 DIGIT_MAP = {
     'O': '0',
-    'Q': '0',
     'I': '1',
-    'L': '1',
     'Z': '2',
     'S': '5',
     'B': '8'
@@ -21,31 +21,75 @@ LETTER_MAP = {
     '8': 'B'
 }
 
-def normalize_plate(raw: str) -> str:
-    #Normalize OCR plate string in a format-aware way
 
+# ---------------------------------------------------
+# 1️⃣  NORMALIZATION
+# ---------------------------------------------------
+
+def normalize_plate(raw: str) -> str:
     if not raw:
         return ""
-    
+
     text = re.sub(r'[^A-Z0-9]', '', raw.upper())
 
-    chars = list(text)
     normalized = []
-
-    #Letter - Digit, Digit - Letter conversions
-    for i, ch in enumerate(chars):
-        if i < 2:  #state code
-            normalized.append(LETTER_MAP.get(ch, ch))
-        elif 2 <= i < 4:  #RTO code (digits)
-            normalized.append(DIGIT_MAP.get(ch, ch))
-        elif 4 <= i < 6:  #series
-            normalized.append(LETTER_MAP.get(ch, ch))
-        else:  #last numbers
-            normalized.append(DIGIT_MAP.get(ch, ch))
+    for ch in text:
+        if ch in DIGIT_MAP:
+            normalized.append(DIGIT_MAP[ch])
+        else:
+            normalized.append(ch)
 
     return "".join(normalized)
 
-#Aggregation
+
+# ---------------------------------------------------
+# 2️⃣  FUZZY SIMILARITY
+# ---------------------------------------------------
+
+def similarity_score(a: str, b: str) -> float:
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def is_similar_plate(a: str, b: str, threshold: float = 0.80) -> bool:
+    if not a or not b:
+        return False
+    return similarity_score(a, b) >= threshold
+
+
+# ---------------------------------------------------
+# 3️⃣  RESOLVE FINAL PLATE
+# ---------------------------------------------------
+
+def resolve_plate_variants(normalized_versions: list[str]):
+    """
+    Preserve all variants with their counts.
+    Primary plate = most frequent.
+    """
+
+    if not normalized_versions:
+        return None, []
+
+    counter = Counter(normalized_versions)
+
+    # Sort by frequency (highest first)
+    sorted_variants = sorted(
+        counter.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    primary_plate = sorted_variants[0][0]
+
+    variants = [
+        {"plate": plate, "count": count}
+        for plate, count in sorted_variants
+    ]
+
+    return primary_plate, variants
+
+# ---------------------------------------------------
+# 4️⃣  BUCKETED AGGREGATION
+# ---------------------------------------------------
 
 def aggregate_case_plates(db: Session, case_id: int):
 
@@ -58,36 +102,59 @@ def aggregate_case_plates(db: Session, case_id: int):
 
     if not sightings:
         return []
-    
-    plate_groups = defaultdict(list)
+
+    # 🔹 Step 1: Normalize and bucket by prefix
+    buckets = defaultdict(list)
 
     for s in sightings:
         norm = normalize_plate(s.plate_number)
-        if len(norm) >= 6:
-            plate_groups[norm].append(s)
+
+        # Bucket key: first 2 characters (safe heuristic)
+        key = norm[:2] if len(norm) >= 3 else norm
+        buckets[key].append((s, norm))
 
     aggregated = []
 
-    for plate, records in plate_groups.items():
-        cameras = []
-        timestamps = []
+    # 🔹 Step 2: Cluster inside each bucket
+    for bucket in buckets.values():
 
-        for r in records:
-            cameras.append(r.camera_id)
-            timestamps.append(r.detected_at)
+        used = set()
 
-        aggregated.append({
-            "final_plate": plate,
-            "count": len(records),
-            "first_seen": min(timestamps),
-            "last_seen": max(timestamps),
-            "cameras": sorted(set(cameras))
-        })
+        for i, (s_obj, s_norm) in enumerate(bucket):
 
-    aggregated.sort(key = lambda x: x["count"], reverse=True)
-    #Most accurately detected plates
-    aggregated = [a for a in aggregated if a["count"] >= 3]
+            if s_obj.id in used:
+                continue
 
+            group_objs = []
+            group_norms = []
+
+            for other_obj, other_norm in bucket:
+
+                if other_obj.id in used:
+                    continue
+
+                if is_similar_plate(s_norm, other_norm):
+                    group_objs.append(other_obj)
+                    group_norms.append(other_norm)
+                    used.add(other_obj.id)
+
+            if not group_objs:
+                continue
+
+            cameras = sorted(set(r.camera_id for r in group_objs))
+            times = [r.event_time or r.detected_at for r in group_objs]
+
+            primary_plate, variants = resolve_plate_variants(group_norms)
+
+            aggregated.append({
+                "primary_plate": primary_plate,
+                "all_variants": variants,
+                "count": len(group_objs),
+                "first_seen": min(times),
+                "last_seen": max(times),
+                "cameras": cameras
+            })
+
+
+    aggregated.sort(key=lambda x: x["count"], reverse=True)
     return aggregated
-
-

@@ -4,7 +4,7 @@ import time
 
 from ultralytics import YOLO
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from backend.app.db.session import SessionLocal
 from backend.app.models.camera import Camera
@@ -148,6 +148,12 @@ def process_video(
                         image_path = os.path.join("data/snapshots", filename)
                         cv2.imwrite(image_path, plate_crop)
                         
+                        fps = cap.get(cv2.CAP_PROP_FPS)
+                        VIDEO_START_TIME = datetime(2026, 2, 4, 9, 0, 0)
+
+                        seconds_offset = frame_count / fps
+                        event_time = VIDEO_START_TIME + timedelta(seconds = seconds_offset)
+
                         sighting = VehicleSighting(
                             case_id = case_id,
                             camera_id = camera_id,
@@ -156,6 +162,7 @@ def process_video(
                             confidence = float(box.conf[0]),
                             plate_number = plate_text,
                             plate_confidence = float(plate_conf) if plate_conf is not None else 0.0,
+                            event_time = event_time,
                             detected_at = now
                         )
 

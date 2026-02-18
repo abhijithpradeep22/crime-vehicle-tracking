@@ -6,9 +6,10 @@ class VehicleSighting(Base):
     __tablename__ = "vehicle_sightings"
 
     id = Column(Integer, primary_key = True, index = True)
-    case_id = Column(Integer, ForeignKey("investigation_cases.id"), nullable = False)
+    case_id = Column(Integer, ForeignKey("investigation_cases.id"), index=True, nullable = False)
     camera_id = Column(String, ForeignKey("cameras.camera_id"), nullable = False)
     image_path = Column(String, nullable = True)
+    event_time = Column(DateTime, index = True,nullable = True)
     detected_at = Column(DateTime, default = datetime.utcnow)
     vehicle_type = Column(String, nullable = True)
     confidence = Column(Float, nullable = True)

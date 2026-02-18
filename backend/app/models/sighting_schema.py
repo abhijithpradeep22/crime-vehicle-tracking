@@ -11,6 +11,7 @@ class SightingBase(BaseModel):
     confidence: Optional[float] = None
     plate_number: Optional[str] = None
     plate_confidence: Optional[float] = None
+    event_time: Optional[datetime] = None
 
 class SightingCreate(SightingBase):
     pass 
