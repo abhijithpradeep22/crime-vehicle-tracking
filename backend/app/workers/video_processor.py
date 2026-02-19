@@ -1,7 +1,5 @@
 import cv2
 import os
-import time
-
 from ultralytics import YOLO
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -11,8 +9,10 @@ from backend.app.models.camera import Camera
 from backend.app.models.case import InvestigationCase
 from backend.app.models.sighting import VehicleSighting
 from backend.app.workers.anpr import extract_plate
+from backend.app.workers.plate_aggregator import is_similar_plate
 
 
+# Load models once (important for multiprocessing)
 model = YOLO("yolov8n.pt")
 plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 
@@ -22,20 +22,24 @@ VEHICLE_CLASSES = {2, 3, 5, 7}
 last_seen_plates = {}  # {(camera_id, plate_text): datetime}
 COOLDOWN_SECONDS = 5
 
+
 def process_video(
     video_path: str,
     case_id: int,
-    camera_id: str
+    camera_id: str,
+    video_start_time: datetime,
+    target_plate: str = None,
+    shared_state=None
 ):
     db: Session = SessionLocal()
 
-    #VALIDATE CAMERA
+    # Validate Camera
     camera = db.query(Camera).filter(Camera.camera_id == camera_id).first()
     if not camera:
         db.close()
         raise ValueError(f"Camera {camera_id} not found")
 
-    #VALIDATE CASE
+    # Validate Case
     case = db.query(InvestigationCase).filter(InvestigationCase.id == case_id).first()
     if not case:
         db.close()
@@ -48,6 +52,9 @@ def process_video(
 
     os.makedirs("data/snapshots", exist_ok=True)
     frame_count = 0
+    alert_triggered = False  # Prevent multiple alerts per camera
+
+    print(f"\nStarted processing {camera_id} at location: {camera.location}")
 
     while True:
         ret, frame = cap.read()
@@ -69,7 +76,6 @@ def process_video(
                 if cls_id not in VEHICLE_CLASSES:
                     continue
 
-                # Skip very low-confidence detections (OCR)
                 if float(box.conf[0]) < 0.5:
                     continue
 
@@ -78,25 +84,18 @@ def process_video(
                 if x2 <= x1 or y2 <= y1:
                     continue
 
-                MIN_WIDTH = 80
-                MIN_HEIGHT = 80
-                MIN_AREA = 80 * 80
                 width = x2 - x1
                 height = y2 - y1
                 area = width * height
 
-                if width < MIN_WIDTH or height < MIN_HEIGHT:
+                if width < 80 or height < 80 or area < 6400:
                     continue
 
-                if area < MIN_AREA:
-                    continue
-
-                #Crop the detected vehicle
                 vehicle_crop = frame[y1:y2, x1:x2]
                 if vehicle_crop.size == 0:
                     continue
 
-                plate_results = plate_model(vehicle_crop, conf = 0.4, verbose = False)
+                plate_results = plate_model(vehicle_crop, conf=0.4, verbose=False)
 
                 for pr in plate_results:
                     if pr.boxes is None:
@@ -118,11 +117,7 @@ def process_video(
                         if plate_crop.size == 0:
                             continue
 
-
                         plate_text, plate_conf = extract_plate(plate_crop)
-
-
-                        #print("OCR raw =>", plate_text, plate_conf) 
 
                         if plate_text is None or plate_conf is None:
                             continue
@@ -130,15 +125,57 @@ def process_video(
                         if plate_conf < 0.45:
                             continue
 
+                        # ---- Calculate event_time EARLY ----
+                        fps = cap.get(cv2.CAP_PROP_FPS)
+                        if not fps or fps <= 0:
+                            fps = 30  # fallback default
+                        seconds_offset = frame_count / fps
+                        event_time = video_start_time + timedelta(seconds=seconds_offset)
+
+                        # -------- REAL-TIME TARGET ALERT --------
+                        if target_plate and not alert_triggered:
+                            if is_similar_plate(plate_text, target_plate, threshold=0.85):
+
+                                print("\n" + "=" * 60)
+                                print("🚨 TARGET VEHICLE DETECTED")
+                                print(f"Plate Detected : {plate_text}")
+                                print(f"Camera ID      : {camera_id}")
+                                print(f"Location       : {camera.location}")
+                                print(f"Event Time     : {event_time}")
+                                print("=" * 60 + "\n")
+
+                                # -------- LATEST KNOWN LOCATION UPDATE --------
+                                if shared_state is not None:
+
+                                    current_latest = shared_state.get("latest_event_time")
+
+                                    if (
+                                        current_latest is None
+                                        or event_time > current_latest
+                                    ):
+                                        shared_state["latest_event_time"] = event_time
+                                        shared_state["latest_camera"] = camera_id
+                                        shared_state["latest_location"] = camera.location
+
+                                        print("\n" + "-" * 60)
+                                        print("🔵 LATEST KNOWN LOCATION UPDATED")
+                                        print(f"Camera   : {camera_id}")
+                                        print(f"Location : {camera.location}")
+                                        print(f"Time     : {event_time}")
+                                        print("-" * 60 + "\n")
+
+
+                                alert_triggered = True
+
+                        # Cooldown control
                         now = datetime.utcnow()
                         key = (camera_id, plate_text)
 
                         if key in last_seen_plates:
-                            if(now - last_seen_plates[key]).total_seconds() < COOLDOWN_SECONDS:
+                            if (now - last_seen_plates[key]).total_seconds() < COOLDOWN_SECONDS:
                                 continue
 
                         last_seen_plates[key] = now
-
 
                         vehicle_type = model.names[cls_id]
 
@@ -147,23 +184,17 @@ def process_video(
                         filename = f"sighting_{case_id}_{camera_id}_{frame_count}_{cls_id}.jpg"
                         image_path = os.path.join("data/snapshots", filename)
                         cv2.imwrite(image_path, plate_crop)
-                        
-                        fps = cap.get(cv2.CAP_PROP_FPS)
-                        VIDEO_START_TIME = datetime(2026, 2, 4, 9, 0, 0)
-
-                        seconds_offset = frame_count / fps
-                        event_time = VIDEO_START_TIME + timedelta(seconds = seconds_offset)
 
                         sighting = VehicleSighting(
-                            case_id = case_id,
-                            camera_id = camera_id,
-                            image_path = image_path,
-                            vehicle_type = vehicle_type,
-                            confidence = float(box.conf[0]),
-                            plate_number = plate_text,
-                            plate_confidence = float(plate_conf) if plate_conf is not None else 0.0,
-                            event_time = event_time,
-                            detected_at = now
+                            case_id=case_id,
+                            camera_id=camera_id,
+                            image_path=image_path,
+                            vehicle_type=vehicle_type,
+                            confidence=float(box.conf[0]),
+                            plate_number=plate_text,
+                            plate_confidence=float(plate_conf),
+                            event_time=event_time,
+                            detected_at=now
                         )
 
                         db.add(sighting)
@@ -174,4 +205,5 @@ def process_video(
     db.commit()
     cap.release()
     db.close()
-    print("Processing Finished")
+
+    print(f"Finished processing {camera_id}")
