@@ -23,12 +23,15 @@ def main():
     print("======================================\n")
 
     manager = Manager()
-    shared_state = manager.dict()
 
-    # Initialize shared latest known location
-    shared_state["latest_event_time"] = None
-    shared_state["latest_camera"] = None
-    shared_state["latest_location"] = None
+    shared_state = manager.dict({
+        "first_event_time": None,
+        "first_camera": None,
+        "first_location": None,
+        "latest_event_time": None,
+        "latest_camera": None,
+        "latest_location": None,
+    })
 
     processes = []
 
@@ -53,13 +56,24 @@ def main():
         p.join()
 
     print("\n===== TRACKING COMPLETED =====")
+    print("\n===== FINAL SUMMARY =====")
 
-    if shared_state["latest_event_time"]:
-        print("\n===== FINAL LATEST KNOWN LOCATION =====")
-        print(f"Camera   : {shared_state['latest_camera']}")
-        print(f"Location : {shared_state['latest_location']}")
-        print(f"Time     : {shared_state['latest_event_time']}")
-        print("=======================================\n")
+    if shared_state.get("first_event_time"):
+
+        print("\nFirst Confirmed Sighting:")
+        print(f"Camera   : {shared_state.get('first_camera')}")
+        print(f"Location : {shared_state.get('first_location')}")
+        print(f"Time     : {shared_state.get('first_event_time')}")
+
+        print("\nLatest Known Location:")
+        print(f"Camera   : {shared_state.get('latest_camera')}")
+        print(f"Location : {shared_state.get('latest_location')}")
+        print(f"Time     : {shared_state.get('latest_event_time')}")
+
+    else:
+        print("No detections found for target.")
+
+    print("=======================================\n")
 
 
 if __name__ == "__main__":

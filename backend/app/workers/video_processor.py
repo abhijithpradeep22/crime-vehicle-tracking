@@ -16,10 +16,9 @@ from backend.app.workers.plate_aggregator import is_similar_plate
 model = YOLO("yolov8n.pt")
 plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 
-# YOLO class IDs: car=2, motorbike=3, bus=5, truck=7
 VEHICLE_CLASSES = {2, 3, 5, 7}
 
-last_seen_plates = {}  # {(camera_id, plate_text): datetime}
+last_seen_plates = {}
 COOLDOWN_SECONDS = 5
 
 
@@ -52,7 +51,7 @@ def process_video(
 
     os.makedirs("data/snapshots", exist_ok=True)
     frame_count = 0
-    alert_triggered = False  # Prevent multiple alerts per camera
+    alert_triggered = False
 
     print(f"\nStarted processing {camera_id} at location: {camera.location}")
 
@@ -63,7 +62,6 @@ def process_video(
 
         frame_count += 1
 
-        # Process every 15th frame
         if frame_count % 15 != 0:
             continue
 
@@ -71,6 +69,7 @@ def process_video(
 
         for r in results:
             for box in r.boxes:
+
                 cls_id = int(box.cls[0])
 
                 if cls_id not in VEHICLE_CLASSES:
@@ -102,6 +101,7 @@ def process_video(
                         continue
 
                     for pbox in pr.boxes:
+
                         px1, py1, px2, py2 = map(int, pbox.xyxy[0])
                         vh, vw = vehicle_crop.shape[:2]
 
@@ -128,46 +128,58 @@ def process_video(
                         # ---- Calculate event_time EARLY ----
                         fps = cap.get(cv2.CAP_PROP_FPS)
                         if not fps or fps <= 0:
-                            fps = 30  # fallback default
+                            fps = 30
+
                         seconds_offset = frame_count / fps
                         event_time = video_start_time + timedelta(seconds=seconds_offset)
 
-                        # -------- REAL-TIME TARGET ALERT --------
+                        # -------- TARGET DETECTION --------
                         if target_plate and not alert_triggered:
                             if is_similar_plate(plate_text, target_plate, threshold=0.85):
 
                                 print("\n" + "=" * 60)
-                                print("🚨 TARGET VEHICLE DETECTED")
+                                print("--- TARGET VEHICLE DETECTED ---")
                                 print(f"Plate Detected : {plate_text}")
                                 print(f"Camera ID      : {camera_id}")
                                 print(f"Location       : {camera.location}")
                                 print(f"Event Time     : {event_time}")
                                 print("=" * 60 + "\n")
 
-                                # -------- LATEST KNOWN LOCATION UPDATE --------
                                 if shared_state is not None:
 
+                                    # ---- FIRST CONFIRMED (Chronological) ----
+                                    current_first = shared_state.get("first_event_time")
+
+                                    if current_first is None or event_time < current_first:
+                                        shared_state["first_event_time"] = event_time
+                                        shared_state["first_camera"] = camera_id
+                                        shared_state["first_location"] = camera.location
+
+                                        print("\n" + "*" * 60)
+                                        print("*** EARLIEST SIGHTING UPDATED ***")
+                                        print(f"Camera   : {camera_id}")
+                                        print(f"Location : {camera.location}")
+                                        print(f"Time     : {event_time}")
+                                        print("*" * 60 + "\n")
+
+                                    # ---- LATEST KNOWN LOCATION ----
                                     current_latest = shared_state.get("latest_event_time")
 
-                                    if (
-                                        current_latest is None
-                                        or event_time > current_latest
-                                    ):
+                                    if current_latest is None or event_time > current_latest:
                                         shared_state["latest_event_time"] = event_time
                                         shared_state["latest_camera"] = camera_id
                                         shared_state["latest_location"] = camera.location
 
                                         print("\n" + "-" * 60)
-                                        print("🔵 LATEST KNOWN LOCATION UPDATED")
+                                        print("*** LATEST KNOWN LOCATION UPDATED ***")
                                         print(f"Camera   : {camera_id}")
                                         print(f"Location : {camera.location}")
                                         print(f"Time     : {event_time}")
                                         print("-" * 60 + "\n")
 
-
                                 alert_triggered = True
 
-                        # Cooldown control
+                        # ---- Cooldown Control ----
                         now = datetime.utcnow()
                         key = (camera_id, plate_text)
 
