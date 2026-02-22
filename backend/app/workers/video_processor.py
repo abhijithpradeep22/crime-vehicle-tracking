@@ -8,16 +8,15 @@ from backend.app.db.session import SessionLocal
 from backend.app.models.camera import Camera
 from backend.app.models.case import InvestigationCase
 from backend.app.models.sighting import VehicleSighting
+from backend.app.models.tracking_session import TrackingSession
 from backend.app.workers.anpr import extract_plate
 from backend.app.workers.plate_aggregator import is_similar_plate
 
 
-# Load models once (important for multiprocessing)
 model = YOLO("yolov8n.pt")
 plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 
 VEHICLE_CLASSES = {2, 3, 5, 7}
-
 last_seen_plates = {}
 COOLDOWN_SECONDS = 5
 
@@ -28,30 +27,36 @@ def process_video(
     camera_id: str,
     video_start_time: datetime,
     target_plate: str = None,
-    shared_state=None
+    tracking_session_id: int = None,
 ):
+
     db: Session = SessionLocal()
 
-    # Validate Camera
     camera = db.query(Camera).filter(Camera.camera_id == camera_id).first()
     if not camera:
         db.close()
         raise ValueError(f"Camera {camera_id} not found")
 
-    # Validate Case
     case = db.query(InvestigationCase).filter(InvestigationCase.id == case_id).first()
     if not case:
         db.close()
         raise ValueError(f"Case {case_id} not found")
+
+    tracking_session = None
+    if tracking_session_id:
+        tracking_session = db.query(TrackingSession).filter(
+            TrackingSession.id == tracking_session_id
+        ).first()
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         db.close()
         raise ValueError(f"Cannot open video: {video_path}")
 
-    os.makedirs("data/snapshots", exist_ok=True)
+    os.makedirs("data/snapshots/vehicles", exist_ok=True)
+    os.makedirs("data/snapshots/plates", exist_ok=True)
+
     frame_count = 0
-    alert_triggered = False
 
     print(f"\nStarted processing {camera_id} at location: {camera.location}")
 
@@ -79,15 +84,7 @@ def process_video(
                     continue
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
-
                 if x2 <= x1 or y2 <= y1:
-                    continue
-
-                width = x2 - x1
-                height = y2 - y1
-                area = width * height
-
-                if width < 80 or height < 80 or area < 6400:
                     continue
 
                 vehicle_crop = frame[y1:y2, x1:x2]
@@ -110,9 +107,6 @@ def process_video(
                         px2 = min(vw, px2)
                         py2 = min(vh, py2)
 
-                        if px2 - px1 < 20 or py2 - py1 < 10:
-                            continue
-
                         plate_crop = vehicle_crop[py1:py2, px1:px2]
                         if plate_crop.size == 0:
                             continue
@@ -125,7 +119,6 @@ def process_video(
                         if plate_conf < 0.45:
                             continue
 
-                        # ---- Calculate event_time EARLY ----
                         fps = cap.get(cv2.CAP_PROP_FPS)
                         if not fps or fps <= 0:
                             fps = 30
@@ -133,53 +126,40 @@ def process_video(
                         seconds_offset = frame_count / fps
                         event_time = video_start_time + timedelta(seconds=seconds_offset)
 
-                        # -------- TARGET DETECTION --------
-                        if target_plate and not alert_triggered:
-                            if is_similar_plate(plate_text, target_plate, threshold=0.85):
+                        # TARGET TRACKING UPDATE
+                        if tracking_session and is_similar_plate(
+                            plate_text,
+                            tracking_session.target_plate,
+                            threshold=0.85
+                        ):
 
-                                print("\n" + "=" * 60)
-                                print("--- TARGET VEHICLE DETECTED ---")
-                                print(f"Plate Detected : {plate_text}")
-                                print(f"Camera ID      : {camera_id}")
-                                print(f"Location       : {camera.location}")
-                                print(f"Event Time     : {event_time}")
-                                print("=" * 60 + "\n")
 
-                                if shared_state is not None:
+                            first_updated = False
+                            latest_updated = False
 
-                                    # ---- FIRST CONFIRMED (Chronological) ----
-                                    current_first = shared_state.get("first_event_time")
+                            if (
+                                tracking_session.first_event_time is None
+                                or event_time < tracking_session.first_event_time
+                            ):
+                                tracking_session.first_event_time = event_time
+                                tracking_session.first_camera = camera_id
+                                tracking_session.first_location = camera.location
+                                first_updated = True
 
-                                    if current_first is None or event_time < current_first:
-                                        shared_state["first_event_time"] = event_time
-                                        shared_state["first_camera"] = camera_id
-                                        shared_state["first_location"] = camera.location
+                            if (
+                                tracking_session.latest_event_time is None
+                                or event_time > tracking_session.latest_event_time
+                            ):
+                                tracking_session.latest_event_time = event_time
+                                tracking_session.latest_camera = camera_id
+                                tracking_session.latest_location = camera.location
+                                latest_updated = True
 
-                                        print("\n" + "*" * 60)
-                                        print("*** EARLIEST SIGHTING UPDATED ***")
-                                        print(f"Camera   : {camera_id}")
-                                        print(f"Location : {camera.location}")
-                                        print(f"Time     : {event_time}")
-                                        print("*" * 60 + "\n")
+                            if first_updated or latest_updated:
+                                db.commit()
+                                print(f"[TRACKING UPDATED] {camera_id} @ {event_time}")
 
-                                    # ---- LATEST KNOWN LOCATION ----
-                                    current_latest = shared_state.get("latest_event_time")
-
-                                    if current_latest is None or event_time > current_latest:
-                                        shared_state["latest_event_time"] = event_time
-                                        shared_state["latest_camera"] = camera_id
-                                        shared_state["latest_location"] = camera.location
-
-                                        print("\n" + "-" * 60)
-                                        print("*** LATEST KNOWN LOCATION UPDATED ***")
-                                        print(f"Camera   : {camera_id}")
-                                        print(f"Location : {camera.location}")
-                                        print(f"Time     : {event_time}")
-                                        print("-" * 60 + "\n")
-
-                                alert_triggered = True
-
-                        # ---- Cooldown Control ----
+                        # -------- COOLDOWN --------
                         now = datetime.utcnow()
                         key = (camera_id, plate_text)
 
@@ -191,22 +171,58 @@ def process_video(
 
                         vehicle_type = model.names[cls_id]
 
-                        print(f"[ANPR] Plate detected: {plate_text} | Camera = {camera_id} | Frame = {frame_count}")
+                        #SAVE FULL FRAME WITH OVERLAY
+                        frame_copy = frame.copy()
 
-                        filename = f"sighting_{case_id}_{camera_id}_{frame_count}_{cls_id}.jpg"
-                        image_path = os.path.join("data/snapshots", filename)
-                        cv2.imwrite(image_path, plate_crop)
+                        cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
+                        cv2.putText(
+                            frame_copy,
+                            plate_text,
+                            (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6,
+                            (0, 255, 0),
+                            2,
+                        )
+
+                        vehicle_filename = f"vehicle_{case_id}_{camera_id}_{frame_count}.jpg"
+                        vehicle_image_path = os.path.join(
+                            "data/snapshots/vehicles", vehicle_filename
+                        )
+
+                        cv2.imwrite(vehicle_image_path, frame_copy)
+
+                        # -------- SAVE PLATE CROP --------
+                        plate_filename = f"plate_{case_id}_{camera_id}_{frame_count}.jpg"
+                        plate_image_path = os.path.join(
+                            "data/snapshots/plates", plate_filename
+                        )
+
+                        cv2.imwrite(plate_image_path, plate_crop)
+
+                        print(
+                            f"[ANPR] Plate detected: {plate_text} | "
+                            f"Camera: {camera_id} | "
+                            f"Frame: {frame_count} | "
+                            f"VehicleConf: {float(box.conf[0]):.2f} | "
+                            f"PlateConf: {plate_conf:.2f}"
+                        )
+
+
+                        # -------- STORE IN DB --------
                         sighting = VehicleSighting(
                             case_id=case_id,
+                            tracking_session_id=tracking_session_id,
                             camera_id=camera_id,
-                            image_path=image_path,
+                            vehicle_image_path=vehicle_image_path,
+                            plate_image_path=plate_image_path,
                             vehicle_type=vehicle_type,
                             confidence=float(box.conf[0]),
                             plate_number=plate_text,
                             plate_confidence=float(plate_conf),
                             event_time=event_time,
-                            detected_at=now
+                            detected_at=now,
                         )
 
                         db.add(sighting)

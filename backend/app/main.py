@@ -1,10 +1,14 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from backend.app.db.base import Base
 from backend.app.db.session import engine
 
 from backend.app.models.camera import Camera
 from backend.app.models.case import InvestigationCase
 from backend.app.models.sighting import VehicleSighting
+from backend.app.api import tracking
+from backend.app.api import tracking_routes
+
 
 from backend.app.api.cameras import router as cameras_router
 from backend.app.api.cases import router as cases_router
@@ -16,9 +20,13 @@ app = FastAPI(
     version="0.1.0"
 )
 
+app.mount("/snapshots", StaticFiles(directory="data/snapshots"), name="snapshots")
 app.include_router(cameras_router)
 app.include_router(cases_router)
 app.include_router(sightings_router)
+app.include_router(tracking.router)
+app.include_router(tracking_routes.router)
+
 
 Base.metadata.create_all(bind=engine)
 
