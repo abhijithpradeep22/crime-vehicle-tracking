@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from backend.app.db.base import Base
 
 
@@ -7,7 +7,8 @@ class TrackingSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    case_id = Column(Integer, nullable=False)
+    case_id = Column(Integer, ForeignKey("investigation_cases.id"), unique=True, nullable=False)
+
     target_plate = Column(String, nullable=False)
 
     first_camera = Column(String, nullable=True)
@@ -18,4 +19,7 @@ class TrackingSession(Base):
     latest_location = Column(String, nullable=True)
     latest_event_time = Column(DateTime, nullable=True)
 
-    status = Column(String, default="running")  # running / completed
+    total_cameras = Column(Integer, default=0)
+    completed_cameras = Column(Integer, default=0)
+
+    status = Column(String, default="running")

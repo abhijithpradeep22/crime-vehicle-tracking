@@ -6,6 +6,7 @@ from backend.app.services.tracking_service import start_tracking
 from backend.app.db.session import SessionLocal
 from backend.app.models.tracking_session import TrackingSession
 
+
 router = APIRouter(prefix="/tracking", tags=["tracking"])
 
 
@@ -14,8 +15,25 @@ class TrackingRequest(BaseModel):
     target_plate: str
 
 
+# START TRACKING
 @router.post("/start")
 def start_tracking_endpoint(payload: TrackingRequest, background_tasks: BackgroundTasks):
+
+    db = SessionLocal()
+
+    existing = db.query(TrackingSession).filter(
+        TrackingSession.case_id == payload.case_id
+    ).first()
+
+    db.close()
+
+    # Prevent multiple sessions for same case
+    if existing:
+        return {
+            "message": "Tracking already exists for this case",
+            "session_id": existing.id,
+            "status": existing.status
+        }
 
     videos = [
         ("data/videos/IMG_1178.mp4", "CAM_001", datetime(2026, 2, 4, 8, 30, 0)),
@@ -34,10 +52,14 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
     return {"message": "Tracking started"}
 
 
+# GET LATEST TRACKING INFO
 @router.get("/latest/{case_id}")
 def get_latest(case_id: int):
+
     db = SessionLocal()
+
     try:
+
         session = db.query(TrackingSession).filter(
             TrackingSession.case_id == case_id
         ).first()
@@ -46,13 +68,21 @@ def get_latest(case_id: int):
             return {"message": "No tracking session found"}
 
         return {
+            "target_plate": session.target_plate,
+
             "first_camera": session.first_camera,
             "first_location": session.first_location,
             "first_event_time": session.first_event_time,
+
             "latest_camera": session.latest_camera,
             "latest_location": session.latest_location,
             "latest_event_time": session.latest_event_time,
-            "status": session.status,
+
+            "total_cameras": session.total_cameras,
+            "completed_cameras": session.completed_cameras,
+
+            "status": session.status
         }
+
     finally:
         db.close()

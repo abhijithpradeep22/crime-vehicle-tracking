@@ -13,13 +13,22 @@ from backend.app.workers.anpr import extract_plate
 from backend.app.workers.plate_aggregator import is_similar_plate
 
 
+# ---------------- MODEL LOADING ---------------- #
+
 model = YOLO("yolov8n.pt")
 plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 
+
+# ---------------- CONFIG ---------------- #
+
 VEHICLE_CLASSES = {2, 3, 5, 7}
-last_seen_plates = {}
+FRAME_SKIP = 15
 COOLDOWN_SECONDS = 5
 
+last_seen_plates = {}
+
+
+# ---------------- MAIN PROCESS FUNCTION ---------------- #
 
 def process_video(
     video_path: str,
@@ -49,6 +58,7 @@ def process_video(
         ).first()
 
     cap = cv2.VideoCapture(video_path)
+
     if not cap.isOpened():
         db.close()
         raise ValueError(f"Cannot open video: {video_path}")
@@ -61,18 +71,20 @@ def process_video(
     print(f"\nStarted processing {camera_id} at location: {camera.location}")
 
     while True:
+
         ret, frame = cap.read()
         if not ret:
             break
 
         frame_count += 1
 
-        if frame_count % 15 != 0:
+        if frame_count % FRAME_SKIP != 0:
             continue
 
         results = model(frame, conf=0.35, iou=0.45, verbose=False)
 
         for r in results:
+
             for box in r.boxes:
 
                 cls_id = int(box.cls[0])
@@ -84,22 +96,28 @@ def process_video(
                     continue
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
+
                 if x2 <= x1 or y2 <= y1:
                     continue
 
                 vehicle_crop = frame[y1:y2, x1:x2]
+
                 if vehicle_crop.size == 0:
                     continue
+
+                # ---------------- PLATE DETECTION ---------------- #
 
                 plate_results = plate_model(vehicle_crop, conf=0.4, verbose=False)
 
                 for pr in plate_results:
+
                     if pr.boxes is None:
                         continue
 
                     for pbox in pr.boxes:
 
                         px1, py1, px2, py2 = map(int, pbox.xyxy[0])
+
                         vh, vw = vehicle_crop.shape[:2]
 
                         px1 = max(0, px1)
@@ -108,6 +126,7 @@ def process_video(
                         py2 = min(vh, py2)
 
                         plate_crop = vehicle_crop[py1:py2, px1:px2]
+
                         if plate_crop.size == 0:
                             continue
 
@@ -116,51 +135,23 @@ def process_video(
                         if plate_text is None or plate_conf is None:
                             continue
 
+                        plate_text = plate_text.upper().replace(" ", "")
+
                         if plate_conf < 0.45:
                             continue
 
                         fps = cap.get(cv2.CAP_PROP_FPS)
+
                         if not fps or fps <= 0:
                             fps = 30
 
                         seconds_offset = frame_count / fps
                         event_time = video_start_time + timedelta(seconds=seconds_offset)
 
-                        # TARGET TRACKING UPDATE
-                        if tracking_session and is_similar_plate(
-                            plate_text,
-                            tracking_session.target_plate,
-                            threshold=0.85
-                        ):
-
-
-                            first_updated = False
-                            latest_updated = False
-
-                            if (
-                                tracking_session.first_event_time is None
-                                or event_time < tracking_session.first_event_time
-                            ):
-                                tracking_session.first_event_time = event_time
-                                tracking_session.first_camera = camera_id
-                                tracking_session.first_location = camera.location
-                                first_updated = True
-
-                            if (
-                                tracking_session.latest_event_time is None
-                                or event_time > tracking_session.latest_event_time
-                            ):
-                                tracking_session.latest_event_time = event_time
-                                tracking_session.latest_camera = camera_id
-                                tracking_session.latest_location = camera.location
-                                latest_updated = True
-
-                            if first_updated or latest_updated:
-                                db.commit()
-                                print(f"[TRACKING UPDATED] {camera_id} @ {event_time}")
-
-                        # -------- COOLDOWN --------
                         now = datetime.utcnow()
+
+                        # ---------------- COOLDOWN FILTER ---------------- #
+
                         key = (camera_id, plate_text)
 
                         if key in last_seen_plates:
@@ -171,7 +162,8 @@ def process_video(
 
                         vehicle_type = model.names[cls_id]
 
-                        #SAVE FULL FRAME WITH OVERLAY
+                        # ---------------- SAVE IMAGE ---------------- #
+
                         frame_copy = frame.copy()
 
                         cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -188,15 +180,16 @@ def process_video(
 
                         vehicle_filename = f"vehicle_{case_id}_{camera_id}_{frame_count}.jpg"
                         vehicle_image_path = os.path.join(
-                            "data/snapshots/vehicles", vehicle_filename
+                            "data/snapshots/vehicles",
+                            vehicle_filename,
                         )
 
                         cv2.imwrite(vehicle_image_path, frame_copy)
 
-                        # -------- SAVE PLATE CROP --------
                         plate_filename = f"plate_{case_id}_{camera_id}_{frame_count}.jpg"
                         plate_image_path = os.path.join(
-                            "data/snapshots/plates", plate_filename
+                            "data/snapshots/plates",
+                            plate_filename,
                         )
 
                         cv2.imwrite(plate_image_path, plate_crop)
@@ -209,8 +202,8 @@ def process_video(
                             f"PlateConf: {plate_conf:.2f}"
                         )
 
+                        # ---------------- SAVE ALL VEHICLE SIGHTINGS ---------------- #
 
-                        # -------- STORE IN DB --------
                         sighting = VehicleSighting(
                             case_id=case_id,
                             tracking_session_id=tracking_session_id,
@@ -227,10 +220,48 @@ def process_video(
 
                         db.add(sighting)
 
+                        # ---------------- TARGET TRACKING ---------------- #
+
+                        if tracking_session and is_similar_plate(
+                            plate_text,
+                            tracking_session.target_plate,
+                            threshold=0.85,
+                        ):
+
+                            first_updated = False
+                            latest_updated = False
+
+                            if (
+                                tracking_session.first_event_time is None
+                                or event_time < tracking_session.first_event_time
+                            ):
+                                tracking_session.first_event_time = event_time
+                                tracking_session.first_camera = camera_id
+                                tracking_session.first_location = camera.location
+                                first_updated = True
+
+                            if (
+                                tracking_session.latest_event_time is None
+                                or (event_time - tracking_session.latest_event_time).total_seconds() > 2
+                            ):
+                                tracking_session.latest_event_time = event_time
+                                tracking_session.latest_camera = camera_id
+                                tracking_session.latest_location = camera.location
+                                latest_updated = True
+
+                            if first_updated or latest_updated:
+
+                                db.commit()
+
+                                print(
+                                    f"[TRACKING UPDATED] {camera_id} @ {event_time}"
+                                )
+
         if frame_count % 100 == 0:
             db.commit()
 
     db.commit()
+
     cap.release()
     db.close()
 

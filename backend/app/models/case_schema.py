@@ -1,16 +1,16 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
 
-class CaseBase(BaseModel):
-    officer_id: str
-    target_vehicle: Optional[str] = None
 
-class CaseCreate(CaseBase):
-    pass 
+class CaseCreate(BaseModel):
+    user_id: int
+    target_vehicle: str
 
-class CaseResponse(CaseBase):
+
+class CaseResponse(BaseModel):
     id: int
+    user_id: int
+    target_vehicle: str
     created_at: datetime
 
     class Config:
