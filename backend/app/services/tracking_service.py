@@ -32,16 +32,15 @@ def _run_tracking_for_camera(
 
 
 def start_tracking(case_id: int, target_plate: str, videos: list):
+
     """
-    videos = [
-        (video_path, camera_id, start_time),
-        ...
-    ]
+      videos = [ (video_path, camera_id, start_time), ... ] 
     """
+
+    print("Tracking started for case:", case_id)
 
     db: Session = SessionLocal()
 
-    # Create new tracking session
     session = TrackingSession(
         case_id=case_id,
         target_plate=target_plate,
@@ -52,13 +51,15 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
     db.commit()
     db.refresh(session)
 
-    tracking_session_id = session.id   #store id
+    tracking_session_id = session.id
 
     db.close()
 
     processes = []
 
     for video_path, camera_id, start_time in videos:
+
+        print("Processing video:", video_path)
 
         p = Process(
             target=_run_tracking_for_camera,
@@ -68,11 +69,32 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
                 camera_id,
                 start_time,
                 target_plate,
-                tracking_session_id,   #pass to worker
+                tracking_session_id,
             ),
         )
 
         p.start()
         processes.append(p)
+
+    # wait for all cameras to finish
+    for p in processes:
+        p.join()
+
+    print("All camera processes finished")
+
+    # update status to finished
+    db = SessionLocal()
+
+    session = db.query(TrackingSession).filter(
+        TrackingSession.id == tracking_session_id
+    ).first()
+
+    if session:
+        session.status = "finished"
+        db.commit()
+
+    db.close()
+
+    print("Tracking session marked as finished")
 
     return tracking_session_id

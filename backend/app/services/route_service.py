@@ -17,10 +17,7 @@ def build_live_route(
 
     session = (
         db.query(TrackingSession)
-        .filter(
-            TrackingSession.case_id == case_id,
-            TrackingSession.status == "running",
-        )
+        .filter(TrackingSession.case_id == case_id)
         .order_by(TrackingSession.id.desc())
         .first()
     )
