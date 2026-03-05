@@ -5,7 +5,6 @@ from backend.app.db.session import SessionLocal
 from backend.app.models.tracking_session import TrackingSession
 from backend.app.workers.video_processor import process_video
 
-
 def _run_tracking_for_camera(
     video_path,
     case_id,
@@ -16,6 +15,8 @@ def _run_tracking_for_camera(
 ):
 
     try:
+
+        print(f"Starting processing for camera {camera_id}")
 
         process_video(
             video_path=video_path,
@@ -34,18 +35,17 @@ def _run_tracking_for_camera(
 
         if session:
 
-            session.completed_cameras += 1
-
-            if session.completed_cameras >= session.total_cameras:
-                session.status = "completed"
-                print("Tracking session marked as completed")
+            # Safe increment
+            session.completed_cameras = (session.completed_cameras or 0) + 1
+            print("Tracking session marked as completed")
 
             db.commit()
 
         db.close()
 
     except Exception as e:
-        print(f"Error in camera {camera_id}: {e}")
+
+        print(f"Error processing camera {camera_id}: {e}")
 
 
 def start_tracking(case_id: int, target_plate: str, videos: list):
@@ -64,12 +64,12 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
         db.close()
         return existing_session.id
 
-    # -------- Create new session --------
+    # -------- Create new tracking session --------
     session = TrackingSession(
         case_id=case_id,
         target_plate=target_plate,
         status="running",
-        total_cameras=len(videos),
+        total_cameras=len(videos),  # important for selected cameras
         completed_cameras=0,
     )
 
@@ -79,12 +79,17 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
 
     tracking_session_id = session.id
 
+    print("Tracking session created:", tracking_session_id)
+    print("Total cameras selected:", len(videos))
+
     db.close()
 
-    # -------- Spawn processes --------
+    # -------- Spawn camera processes --------
+    processes = []
+
     for video_path, camera_id, start_time in videos:
 
-        print("Processing video:", video_path)
+        print(f"Launching process for {camera_id}")
 
         p = Process(
             target=_run_tracking_for_camera,
@@ -99,5 +104,8 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
         )
 
         p.start()
+        processes.append(p)
+
+    print("All camera processes started")
 
     return tracking_session_id

@@ -1,0 +1,294 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap');
+
+/* ── Reset & Base ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Rajdhani', sans-serif;
+}
+
+/* ── Page ─────────────────────────────────────────── */
+.login-page {
+  min-height: 100vh;
+  width: 100%;
+  background-color: #050c14;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Dot-grid background */
+.bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, rgba(0, 229, 255, 0.12) 1px, transparent 1px);
+  background-size: 36px 36px;
+  animation: gridPulse 6s ease-in-out infinite;
+}
+
+@keyframes gridPulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
+}
+
+
+
+/* ── Wrapper + Corner Brackets ────────────────────── */
+.login-wrapper {
+  position: relative;
+  z-index: 2;
+  animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.bracket {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: rgba(0, 229, 255, 0.6);
+  border-style: solid;
+}
+.bracket.tl { top: -8px; left: -8px;  border-width: 2px 0 0 2px; }
+.bracket.tr { top: -8px; right: -8px; border-width: 2px 2px 0 0; }
+.bracket.bl { bottom: -8px; left: -8px;  border-width: 0 0 2px 2px; }
+.bracket.br { bottom: -8px; right: -8px; border-width: 0 2px 2px 0; }
+
+/* ── Card ─────────────────────────────────────────── */
+.login-card {
+  background: linear-gradient(160deg, #0d1a26 0%, #091420 100%);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 4px;
+  width: 420px;
+  padding: 32px 36px 24px;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.5),
+    0 24px 64px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(0, 229, 255, 0.08);
+}
+
+/* ── Card Header ──────────────────────────────────── */
+.card-header {
+  margin-bottom: 24px;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 20px;
+}
+
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #00e5ff;
+  box-shadow: 0 0 8px #00e5ff;
+  animation: blink 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.status-text {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: #00e5ff;
+  opacity: 0.8;
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.shield-icon svg {
+  width: 42px;
+  height: 48px;
+  filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.4));
+}
+
+.title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.login-title {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 26px;
+  letter-spacing: 0.14em;
+  color: #e8f4ff;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(0, 229, 255, 0.3);
+}
+
+.login-subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: rgba(0, 229, 255, 0.6);
+  text-transform: uppercase;
+}
+
+/* ── Form ─────────────────────────────────────────── */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: rgba(0, 229, 255, 0.55);
+}
+
+.input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field-icon {
+  position: absolute;
+  left: 13px;
+  width: 15px;
+  height: 15px;
+  color: rgba(0, 229, 255, 0.4);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.input-wrap input {
+  width: 100%;
+  padding: 12px 14px 12px 40px;
+  background: rgba(0, 229, 255, 0.04);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 3px;
+  color: #cce9f5;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.input-wrap input::placeholder {
+  color: rgba(150, 190, 210, 0.3);
+  font-weight: 400;
+}
+
+.input-wrap input:focus {
+  border-color: rgba(0, 229, 255, 0.5);
+  background: rgba(0, 229, 255, 0.07);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.07), inset 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.input-wrap input:focus + .field-icon,
+.input-wrap:focus-within .field-icon {
+  color: rgba(0, 229, 255, 0.75);
+}
+
+/* ── Error ────────────────────────────────────────── */
+.error-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 60, 60, 0.08);
+  border: 1px solid rgba(255, 60, 60, 0.3);
+  border-radius: 3px;
+  padding: 9px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #ff6b6b;
+  animation: shakeX 0.4s ease;
+}
+
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+/* ── Button ───────────────────────────────────────── */
+.login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  padding: 13px;
+  margin-top: 4px;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  border-radius: 3px;
+  background: linear-gradient(135deg, rgba(0,229,255,0.12), rgba(0,150,200,0.08));
+  color: #00e5ff;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.05), inset 0 1px 0 rgba(0,229,255,0.1);
+}
+
+.login-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(0,229,255,0.22), rgba(0,150,200,0.16));
+  border-color: rgba(0, 229, 255, 0.7);
+  box-shadow: 0 0 28px rgba(0, 229, 255, 0.18), inset 0 1px 0 rgba(0,229,255,0.15);
+  transform: translateY(-1px);
+  color: #fff;
+}
+
+.login-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(0, 229, 255, 0.2);
+  border-top-color: #00e5ff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+
+
+

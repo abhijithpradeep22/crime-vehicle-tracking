@@ -105,8 +105,6 @@ def process_video(
                 if vehicle_crop.size == 0:
                     continue
 
-                # ---------------- PLATE DETECTION ---------------- #
-
                 plate_results = plate_model(vehicle_crop, conf=0.4, verbose=False)
 
                 for pr in plate_results:
@@ -150,8 +148,6 @@ def process_video(
 
                         now = datetime.utcnow()
 
-                        # ---------------- COOLDOWN FILTER ---------------- #
-
                         key = (camera_id, plate_text)
 
                         if key in last_seen_plates:
@@ -161,8 +157,6 @@ def process_video(
                         last_seen_plates[key] = now
 
                         vehicle_type = model.names[cls_id]
-
-                        # ---------------- SAVE IMAGE ---------------- #
 
                         frame_copy = frame.copy()
 
@@ -197,12 +191,8 @@ def process_video(
                         print(
                             f"[ANPR] Plate detected: {plate_text} | "
                             f"Camera: {camera_id} | "
-                            f"Frame: {frame_count} | "
-                            f"VehicleConf: {float(box.conf[0]):.2f} | "
-                            f"PlateConf: {plate_conf:.2f}"
+                            f"Frame: {frame_count}"
                         )
-
-                        # ---------------- SAVE ALL VEHICLE SIGHTINGS ---------------- #
 
                         sighting = VehicleSighting(
                             case_id=case_id,
@@ -220,8 +210,6 @@ def process_video(
 
                         db.add(sighting)
 
-                        # ---------------- TARGET TRACKING ---------------- #
-
                         if tracking_session and is_similar_plate(
                             plate_text,
                             tracking_session.target_plate,
@@ -231,6 +219,7 @@ def process_video(
                             first_updated = False
                             latest_updated = False
 
+                            # FIRST detection
                             if (
                                 tracking_session.first_event_time is None
                                 or event_time < tracking_session.first_event_time
@@ -240,9 +229,10 @@ def process_video(
                                 tracking_session.first_location = camera.location
                                 first_updated = True
 
+                            # LATEST detection (correct logic)
                             if (
                                 tracking_session.latest_event_time is None
-                                or (event_time - tracking_session.latest_event_time).total_seconds() > 2
+                                or event_time > tracking_session.latest_event_time
                             ):
                                 tracking_session.latest_event_time = event_time
                                 tracking_session.latest_camera = camera_id

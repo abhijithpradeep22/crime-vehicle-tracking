@@ -13,6 +13,7 @@ from backend.app.api import auth
 from backend.app.api.cameras import router as cameras_router
 from backend.app.api.cases import router as cases_router
 from backend.app.api.sightings import router as sightings_router
+from backend.app.api import reports
 
 app = FastAPI(
     title="Crime Vehicle Detection System",
@@ -26,6 +27,7 @@ app.include_router(cases_router)
 app.include_router(sightings_router)
 app.include_router(tracking.router)
 app.include_router(tracking_routes.router)
+app.include_router(reports.router)
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 
 app.add_middleware(
