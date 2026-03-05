@@ -68,7 +68,7 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
     session = TrackingSession(
         case_id=case_id,
         target_plate=target_plate,
-        status="running",
+        status="active",
         total_cameras=len(videos),  # important for selected cameras
         completed_cameras=0,
     )

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -16,6 +16,7 @@ class TrackingRequest(BaseModel):
     camera_ids: list[str] | None = None
 
 
+# START TRACKING
 @router.post("/start")
 def start_tracking_endpoint(payload: TrackingRequest, background_tasks: BackgroundTasks):
 
@@ -58,6 +59,38 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
     return {"message": "Tracking started"}
 
 
+# STOP TRACKING
+@router.post("/stop/{case_id}")
+def stop_tracking(case_id: int):
+
+    db = SessionLocal()
+
+    try:
+
+        session = (
+            db.query(TrackingSession)
+            .filter(
+                TrackingSession.case_id == case_id,
+                TrackingSession.status == "active"
+            )
+            .order_by(TrackingSession.id.desc())
+            .first()
+        )
+
+        if not session:
+            raise HTTPException(status_code=404, detail="No active tracking session")
+
+        session.status = "stopped"
+
+        db.commit()
+
+        return {"message": "Tracking stopped"}
+
+    finally:
+        db.close()
+
+
+# GET LIVE STATUS
 @router.get("/latest/{case_id}")
 def get_latest(case_id: int):
 

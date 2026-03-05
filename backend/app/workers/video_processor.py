@@ -67,6 +67,7 @@ def process_video(
     os.makedirs("data/snapshots/plates", exist_ok=True)
 
     frame_count = 0
+    stop_check_counter = 0
 
     print(f"\nStarted processing {camera_id} at location: {camera.location}")
 
@@ -77,6 +78,20 @@ def process_video(
             break
 
         frame_count += 1
+        stop_check_counter += 1
+
+        # ---- CHECK IF USER STOPPED TRACKING ----
+        if tracking_session_id and stop_check_counter % 30 == 0:
+            session = db.query(TrackingSession).filter(
+                TrackingSession.id == tracking_session_id
+            ).first()
+
+            if session and session.status == "stopped":
+                print(f"[STOP] Tracking stopped by user for case {case_id}")
+                cap.release()
+                db.commit()
+                db.close()
+                return
 
         if frame_count % FRAME_SKIP != 0:
             continue

@@ -26,8 +26,12 @@ export default function Dashboard() {
 
   const [popupImage, setPopupImage] = useState(null);
 
+  const [trackingStarted, setTrackingStarted] = useState(false);
+
   const navigate = useNavigate();
 
+
+  /* LOAD USER */
 
   useEffect(() => {
     const id = localStorage.getItem("user_id");
@@ -35,25 +39,27 @@ export default function Dashboard() {
   }, []);
 
 
+  /* LOAD CASES */
+
   useEffect(() => {
 
     if (!userId) return;
 
     const loadCases = async () => {
-
       try {
         const data = await apiRequest(`/cases/user/${userId}`);
         setCases(data);
       } catch (err) {
         console.error(err);
       }
-
     };
 
     loadCases();
 
   }, [userId]);
 
+
+  /* LOAD CAMERAS */
 
   useEffect(() => {
 
@@ -73,6 +79,8 @@ export default function Dashboard() {
   }, []);
 
 
+  /* CAMERA TOGGLE */
+
   const toggleCamera = (id) => {
 
     if (selectedCameras.includes(id)) {
@@ -84,32 +92,18 @@ export default function Dashboard() {
   };
 
 
+  /* LOAD REPORTS */
+
   const loadReports = async (caseId) => {
 
     try {
+
       const data = await apiRequest(`/reports/case/${caseId}`);
       setReports(data);
-    } catch (err) {
-      console.error(err);
-    }
 
-  };
-
-
-  const openCase = async (caseId) => {
-
-    try {
-
-      setSelectedCase({ id: caseId });
-
-      const reports = await apiRequest(`/reports/case/${caseId}`);
-      setReports(reports);
-
-      if (reports.length > 0) {
-
-        const report = await apiRequest(`/reports/${reports[0].id}`);
+      if (data.length > 0) {
+        const report = await apiRequest(`/reports/${data[0].id}`);
         setSelectedReport(report);
-
       }
 
     } catch (err) {
@@ -121,7 +115,58 @@ export default function Dashboard() {
   };
 
 
+  /* OPEN CASE */
+
+  const openCase = async (caseId) => {
+
+    try {
+
+      if (livePolling) clearInterval(livePolling);
+      if (routePolling) clearInterval(routePolling);
+
+      setTrackingStarted(false);
+      setTrackingInfo(null);
+      setRouteData(null);
+      setSelectedReport(null);
+      setSelectedCameras([]);
+
+      const caseData = cases.find(c => c.id === caseId);
+
+      setSelectedCase(caseData);
+      setVehicleNumber(caseData?.target_vehicle || "");
+
+      await loadReports(caseId);
+
+      const latest = await apiRequest(`/tracking/latest/${caseId}`);
+
+      if (latest && latest.status === "running") {
+
+        setTrackingStarted(true);
+        setTrackingInfo(latest);
+
+        startPolling(caseId);
+
+      }
+
+    } catch (err) {
+
+      console.error("Failed loading case", err);
+
+    }
+
+  };
+
+
+  /* CREATE CASE */
+
   const createCase = async () => {
+
+    if (!vehicleNumber || vehicleNumber.trim() === "") {
+
+      alert("Vehicle number is required");
+      return;
+
+    }
 
     try {
 
@@ -135,6 +180,11 @@ export default function Dashboard() {
       setSelectedCase(res);
       setCases(prev => [res, ...prev]);
 
+      setTrackingStarted(false);
+      setTrackingInfo(null);
+      setRouteData(null);
+      setSelectedCameras([]);
+
     } catch (err) {
 
       console.error(err);
@@ -145,9 +195,19 @@ export default function Dashboard() {
   };
 
 
+  /* START TRACKING */
+
   const startTracking = async () => {
 
-    if (!selectedCase) return;
+    if (!selectedCase) {
+      alert("Create or select a case first");
+      return;
+    }
+
+    if (selectedCameras.length === 0) {
+      alert("Select at least one camera");
+      return;
+    }
 
     try {
 
@@ -158,6 +218,8 @@ export default function Dashboard() {
         camera_ids: selectedCameras
 
       });
+
+      setTrackingStarted(true);
 
       startPolling(selectedCase.id);
 
@@ -170,16 +232,52 @@ export default function Dashboard() {
   };
 
 
-  const saveReport = async () => {
+  /* STOP TRACKING */
+
+  const stopTracking = async () => {
 
     if (!selectedCase) {
-      alert("Select a case first");
+      alert("No active case");
       return;
     }
 
+    try {
+
+      await apiRequest(`/tracking/stop/${selectedCase.id}`, "POST");
+
+      if (livePolling) clearInterval(livePolling);
+      if (routePolling) clearInterval(routePolling);
+
+      setTrackingStarted(false);
+      setTrackingInfo(null);
+
+      alert("Tracking stopped");
+
+    } catch (err) {
+
+      console.error(err);
+
+    }
+
+  };
+
+
+  /* SAVE REPORT */
+
+  const saveReport = async () => {
+
+    if (!selectedCase) {
+
+      alert("Select a case first");
+      return;
+
+    }
+
     if (!routeData?.stops?.length) {
+
       alert("No route data yet");
       return;
+
     }
 
     try {
@@ -199,21 +297,7 @@ export default function Dashboard() {
   };
 
 
-  const openReport = async (reportId) => {
-
-    try {
-
-      const data = await apiRequest(`/reports/${reportId}`);
-      setSelectedReport(data);
-
-    } catch (err) {
-
-      console.error(err);
-
-    }
-
-  };
-
+  /* POLLING */
 
   const startPolling = (caseId) => {
 
@@ -249,6 +333,8 @@ export default function Dashboard() {
   };
 
 
+  /* LOGOUT */
+
   const handleLogout = () => {
 
     if (livePolling) clearInterval(livePolling);
@@ -262,9 +348,12 @@ export default function Dashboard() {
   };
 
 
+  /* UI */
+
   return (
 
 <div className="dashboard">
+
 
 {/* HEADER */}
 
@@ -311,7 +400,6 @@ onChange={(e) => setVehicleNumber(e.target.value)}
 Create Case
 </button>
 
-
 {selectedCase && (
 
 <div className="active-case">
@@ -326,18 +414,33 @@ Create Case
 
 <div className="divider"/>
 
-<p className="panel-title">Start Tracking</p>
+<p className="panel-title">Tracking Control</p>
 
-<button className="btn btn-track" onClick={startTracking}>
+<button
+className="btn btn-track"
+onClick={startTracking}
+disabled={trackingStarted}
+>
 Start Tracking
 </button>
 
-<button className="btn btn-save" onClick={saveReport}>
+<button
+className="btn btn-stop"
+onClick={stopTracking}
+disabled={!trackingStarted}
+>
+Stop Tracking
+</button>
+
+<button
+className="btn btn-save"
+onClick={saveReport}
+disabled={!routeData?.stops?.length}
+>
 Save Report
 </button>
 
 </div>
-
 
 
 {/* LIVE TRACKING */}
@@ -374,11 +477,6 @@ Save Report
 </span>
 </div>
 
-<div className="info-row">
-<span className="info-label">Cameras Processing</span>
-<span className="info-value">{trackingInfo.total_cameras || 0}</span>
-</div>
-
 </div>
 
 ) : (
@@ -388,7 +486,6 @@ Save Report
 )}
 
 </div>
-
 
 
 {/* HISTORY */}
@@ -421,8 +518,41 @@ onClick={() => openCase(c.id)}
 </div>
 
 
+{/* CAMERA SECTION */}
 
-{/* ROUTE RECONSTRUCTION */}
+<div className="camera-section">
+
+<p className="section-title">Select Cameras</p>
+
+<div className="camera-grid">
+
+{cameraList.map(cam => (
+
+<label
+key={cam.camera_id}
+className={`cam-chip ${
+selectedCameras.includes(cam.camera_id) ? "cam-chip--on" : ""
+}`}
+>
+
+<input
+type="checkbox"
+checked={selectedCameras.includes(cam.camera_id)}
+onChange={() => toggleCamera(cam.camera_id)}
+/>
+
+{cam.camera_id} — {cam.location}
+
+</label>
+
+))}
+
+</div>
+
+</div>
+
+
+{/* ROUTE */}
 
 <div className="route-section">
 
@@ -449,7 +579,6 @@ onClick={() => openCase(c.id)}
 <div className="stop-info">
 
 <span className="stop-cam">{stop.camera_id}</span>
-
 <span className="stop-loc">{stop.location}</span>
 
 <span className="stop-time">
@@ -460,9 +589,7 @@ onClick={() => openCase(c.id)}
 className="stop-sighting"
 onClick={() => setPopupImage(stop.representative_vehicle_image)}
 >
-
 View Sighting
-
 </span>
 
 </div>
@@ -481,9 +608,7 @@ View Sighting
 
 </div>
 
-
-
-{/* REPORT VIEWER */}
+{/* INVESTIGATION REPORT */}
 
 {selectedReport && (
 
@@ -532,8 +657,6 @@ alt="plate"
 </div>
 
 )}
-
-
 
 {/* IMAGE POPUP */}
 
