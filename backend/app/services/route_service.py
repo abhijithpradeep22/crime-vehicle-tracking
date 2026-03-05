@@ -38,7 +38,11 @@ def build_live_route(
         return []
 
     camera_map = {
-        cam.camera_id: cam.location
+        cam.camera_id: {
+            "location": cam.location,
+            "latitude": cam.latitude,
+            "longitude": cam.longitude
+        }
         for cam in db.query(Camera).all()
     }
 
@@ -52,7 +56,16 @@ def build_live_route(
         if not is_similar_plate(s.plate_number, target_plate, threshold=0.85):
             continue
 
-        location = camera_map.get(s.camera_id, "Unknown")
+        cam = camera_map.get(s.camera_id)
+
+        if cam:
+            location = cam["location"]
+            latitude = cam["latitude"]
+            longitude = cam["longitude"]
+        else:
+            location = "Unknown"
+            latitude = None
+            longitude = None
 
         vehicle_image_url = (
             f"/snapshots/vehicles/{os.path.basename(s.vehicle_image_path)}"
@@ -70,6 +83,8 @@ def build_live_route(
             current_stop = {
                 "camera_id": s.camera_id,
                 "location": location,
+                "latitude": latitude,
+                "longitude": longitude,
                 "first_seen": s.event_time,
                 "last_seen": s.event_time,
                 "total_detections": 1,
@@ -99,6 +114,8 @@ def build_live_route(
             current_stop = {
                 "camera_id": s.camera_id,
                 "location": location,
+                "latitude": latitude,
+                "longitude": longitude,
                 "first_seen": s.event_time,
                 "last_seen": s.event_time,
                 "total_detections": 1,

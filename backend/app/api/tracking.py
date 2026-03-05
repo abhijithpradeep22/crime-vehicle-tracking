@@ -6,6 +6,10 @@ from backend.app.services.tracking_service import start_tracking
 from backend.app.db.session import SessionLocal
 from backend.app.models.tracking_session import TrackingSession
 
+from sqlalchemy import desc
+from backend.app.models.sighting import VehicleSighting
+from backend.app.models.camera import Camera
+
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
 
@@ -105,6 +109,29 @@ def get_latest(case_id: int):
         if not session:
             return {"message": "No tracking session found"}
 
+        latest_sighting = (
+            db.query(VehicleSighting)
+            .filter(VehicleSighting.tracking_session_id == session.id)
+            .order_by(desc(VehicleSighting.event_time))
+            .first()
+        )
+
+        latest_camera = None
+        latest_location = None
+        latest_time = None
+
+        if latest_sighting:
+            latest_camera = latest_sighting.camera_id
+
+            camera = db.query(Camera).filter(
+                Camera.camera_id == latest_camera
+            ).first()
+
+            if camera:
+                latest_location = camera.location
+
+            latest_time = latest_sighting.event_time
+
         return {
             "target_plate": session.target_plate,
 
@@ -112,9 +139,9 @@ def get_latest(case_id: int):
             "first_location": session.first_location,
             "first_event_time": session.first_event_time,
 
-            "latest_camera": session.latest_camera,
-            "latest_location": session.latest_location,
-            "latest_event_time": session.latest_event_time,
+            "latest_camera": latest_camera,
+            "latest_location": latest_location,
+            "latest_event_time": latest_time,
 
             "total_cameras": session.total_cameras,
             "completed_cameras": session.completed_cameras,

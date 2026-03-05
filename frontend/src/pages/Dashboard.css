@@ -228,8 +228,16 @@ body {
 
 .route-track {
   display: flex;
-  flex-direction: row;
-  overflow-x: auto;
+  gap: 60px;
+  align-items: flex-start;
+  flex-wrap: wrap; 
+}
+
+.route-stop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 140px;
 }
 
 .stop-num {
@@ -245,7 +253,11 @@ body {
 }
 
 .stop-info {
-  padding-right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
 }
 
 .stop-cam {
@@ -269,6 +281,10 @@ body {
   color: #00e6ff;
   margin-top: 4px;
   font-size: 11px;
+}
+
+.stop-marker {
+  margin-bottom: 10px;
 }
 
 /* ── Popup Image Viewer ─────────────────────────── */
@@ -431,4 +447,28 @@ background:rgba(0,229,255,0.05);
 border-color:rgba(0,229,255,0.55);
 background:rgba(0,229,255,0.1);
 color:#00e5ff;
+}
+
+.dashboard-layout{
+  display:grid;
+  grid-template-columns:300px 1fr 500px;
+  height:100vh;
+}
+
+.map-panel{
+  height: 450px;
+  margin-top: 20px;
+}
+
+.route-marker{
+  background:#1e88e5;
+  color:white;
+  border-radius:50%;
+  width:28px;
+  height:28px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:bold;
+  border:2px solid white;
 }

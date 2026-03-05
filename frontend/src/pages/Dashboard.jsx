@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { apiRequest } from "../api/client";
 import { useNavigate } from "react-router-dom";
+import RouteMap from "../components/RouteMap";
 import "./Dashboard.css";
+
 
 export default function Dashboard() {
 
@@ -29,7 +31,7 @@ export default function Dashboard() {
   const [trackingStarted, setTrackingStarted] = useState(false);
 
   const navigate = useNavigate();
-
+  const [routeStops, setRouteStops] = useState([]);
 
   /* LOAD USER */
 
@@ -322,6 +324,7 @@ export default function Dashboard() {
 
         const data = await apiRequest(`/tracking/route/${caseId}`);
         setRouteData(data);
+        setRouteStops(data.stops);
 
       } catch {}
 
@@ -346,6 +349,16 @@ export default function Dashboard() {
     navigate("/");
 
   };
+
+  const loadRoute = async (caseId) => {
+    const data = await apiRequest(`/tracking/route/${caseId}`);
+    setRouteStops(data.stops);
+  };
+  useEffect(() => {
+    if (selectedCase) {
+      loadRoute(selectedCase.id);
+    }
+  }, [selectedCase]);
 
 
   /* UI */
@@ -488,6 +501,8 @@ Save Report
 </div>
 
 
+
+
 {/* HISTORY */}
 
 <div className="panel">
@@ -606,6 +621,10 @@ View Sighting
 
 )}
 
+</div>
+
+<div className="map-panel">
+  {routeStops?.length > 0 && <RouteMap stops={routeStops} />}
 </div>
 
 {/* INVESTIGATION REPORT */}
