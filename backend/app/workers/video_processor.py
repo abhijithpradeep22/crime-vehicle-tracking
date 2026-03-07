@@ -22,10 +22,11 @@ plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 # ---------------- CONFIG ---------------- #
 
 VEHICLE_CLASSES = {2, 3, 5, 7}
-FRAME_SKIP = 15
+FRAME_SKIP = 20
 COOLDOWN_SECONDS = 5
 
 last_seen_plates = {}
+last_tracking_update = {}
 
 
 # ---------------- MAIN PROCESS FUNCTION ---------------- #
@@ -96,7 +97,7 @@ def process_video(
         if frame_count % FRAME_SKIP != 0:
             continue
 
-        results = model(frame, conf=0.35, iou=0.45, verbose=False)
+        results = model(frame, conf=0.45, iou=0.45, verbose=False)
 
         for r in results:
 
@@ -150,7 +151,7 @@ def process_video(
 
                         plate_text = plate_text.upper().replace(" ", "")
 
-                        if plate_conf < 0.45:
+                        if plate_conf < 0.5 or float(box.conf[0]) < 0.6:
                             continue
 
                         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -225,11 +226,7 @@ def process_video(
 
                         db.add(sighting)
 
-                        if tracking_session and is_similar_plate(
-                            plate_text,
-                            tracking_session.target_plate,
-                            threshold=0.85,
-                        ):
+                        if tracking_session and plate_text == tracking_session.target_plate:
 
                             first_updated = False
                             latest_updated = False
@@ -256,13 +253,19 @@ def process_video(
 
                             if first_updated or latest_updated:
 
+                                key = (camera_id, tracking_session.target_plate)
+
+                                if key in last_tracking_update:
+                                    if (now - last_tracking_update[key]).total_seconds() < 10:
+                                        continue
+
+                                last_tracking_update[key] = now
+
                                 tracking_session.match_found = True
 
                                 db.commit()
 
-                                print(
-                                    f"[TRACKING UPDATED] {camera_id} @ {event_time}"
-                                )
+                            print(f"[TRACKING UPDATED] {camera_id} @ {event_time}")
 
         if frame_count % 100 == 0:
             db.commit()
