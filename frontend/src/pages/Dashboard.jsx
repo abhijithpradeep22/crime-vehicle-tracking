@@ -23,12 +23,19 @@ export default function Dashboard() {
   const [cameraList, setCameraList] = useState([]);
   const [selectedCameras, setSelectedCameras] = useState([]);
 
+  const [caseSearch, setCaseSearch] = useState("");
+
   const [reports, setReports] = useState([]);
   const [selectedReport, setSelectedReport] = useState(null);
 
   const [popupImage, setPopupImage] = useState(null);
 
   const [trackingStarted, setTrackingStarted] = useState(false);
+
+  const [noMatchShown, setNoMatchShown] = useState(false);
+  const [showNoMatchModal, setShowNoMatchModal] = useState(false);
+
+  const [historyMode, setHistoryMode] = useState(false);
 
   const navigate = useNavigate();
   const [routeStops, setRouteStops] = useState([]);
@@ -135,7 +142,7 @@ export default function Dashboard() {
       const caseData = cases.find(c => c.id === caseId);
 
       setSelectedCase(caseData);
-      setVehicleNumber(caseData?.target_vehicle || "");
+      setHistoryMode(true);
 
       await loadReports(caseId);
 
@@ -181,6 +188,7 @@ export default function Dashboard() {
 
       setSelectedCase(res);
       setCases(prev => [res, ...prev]);
+      setHistoryMode(false);
 
       setTrackingStarted(false);
       setTrackingInfo(null);
@@ -222,6 +230,7 @@ export default function Dashboard() {
       });
 
       setTrackingStarted(true);
+      setNoMatchShown(false);
 
       startPolling(selectedCase.id);
 
@@ -303,37 +312,50 @@ export default function Dashboard() {
 
   const startPolling = (caseId) => {
 
-    if (livePolling) clearInterval(livePolling);
-    if (routePolling) clearInterval(routePolling);
+  if (livePolling) clearInterval(livePolling);
+  if (routePolling) clearInterval(routePolling);
 
-    const live = setInterval(async () => {
+  const live = setInterval(async () => {
 
-      try {
+  try {
 
-        const latest = await apiRequest(`/tracking/latest/${caseId}`);
-        setTrackingInfo(latest);
+    const latest = await apiRequest(`/tracking/latest/${caseId}`);
+    setTrackingInfo(latest);
 
-      } catch {}
+    if (latest.status === "completed") {
 
-    }, 3000);
+      clearInterval(live);
+      clearInterval(route);
+
+      if (!latest.match_found) {
+        setShowNoMatchModal(true);
+      }
+
+    }
+
+    } catch (err) {
+      console.error(err);
+    }
+
+  }, 3000);
 
 
-    const route = setInterval(async () => {
+  const route = setInterval(async () => {
 
-      try {
+    try {
 
-        const data = await apiRequest(`/tracking/route/${caseId}`);
-        setRouteData(data);
-        setRouteStops(data.stops);
+      const data = await apiRequest(`/tracking/route/${caseId}`);
+      setRouteData(data);
+      setRouteStops(data.stops);
 
-      } catch {}
+    } catch {}
 
-    }, 9000);
+  }, 9000);
 
-    setLivePolling(live);
-    setRoutePolling(route);
+  setLivePolling(live);
+  setRoutePolling(route);
 
-  };
+};
 
 
   /* LOGOUT */
@@ -359,6 +381,11 @@ export default function Dashboard() {
       loadRoute(selectedCase.id);
     }
   }, [selectedCase]);
+
+
+  const filteredCases = cases.filter(c =>
+    c.target_vehicle.toLowerCase().includes(caseSearch.toLowerCase())
+  );
 
 
   /* UI */
@@ -406,20 +433,28 @@ LOGOUT
 className="field-input"
 placeholder="Target Vehicle Number"
 value={vehicleNumber}
-onChange={(e) => setVehicleNumber(e.target.value)}
+onChange={(e) => {
+  let value = e.target.value.toUpperCase();
+
+  // allow only letters and numbers
+  value = value.replace(/[^A-Z0-9]/g, "");
+
+  if (value.length > 10) {
+    value = value.slice(0, 10);
+  }
+
+  setVehicleNumber(value);
+}}
 />
 
 <button className="btn btn-primary" onClick={createCase}>
 Create Case
 </button>
-
 {selectedCase && (
 
-<div className="active-case">
+<div className="tracking-status">
 
-<span className="case-label">Active Case</span>
-<span className="case-id">#{selectedCase.id}</span>
-<span className="case-vehicle">{selectedCase.target_vehicle}</span>
+Tracking Case #{selectedCase.id} — {selectedCase.target_vehicle}
 
 </div>
 
@@ -432,7 +467,7 @@ Create Case
 <button
 className="btn btn-track"
 onClick={startTracking}
-disabled={trackingStarted}
+disabled={trackingStarted || historyMode}
 >
 Start Tracking
 </button>
@@ -440,7 +475,7 @@ Start Tracking
 <button
 className="btn btn-stop"
 onClick={stopTracking}
-disabled={!trackingStarted}
+disabled={!trackingStarted || historyMode}
 >
 Stop Tracking
 </button>
@@ -509,13 +544,20 @@ Save Report
 
 <p className="panel-title">Investigation History</p>
 
+<input
+  className="field-input"
+  placeholder="Search vehicle number..."
+  value={caseSearch}
+  onChange={(e) => setCaseSearch(e.target.value)}
+/>
+
 <div className="case-list">
 
-{cases.map(c => (
+{filteredCases.map(c => (
 
 <div
 key={c.id}
-className="case-item"
+className={`case-item ${selectedCase?.id === c.id ? "active" : ""}`}
 onClick={() => openCase(c.id)}
 >
 
@@ -700,6 +742,33 @@ alt="Vehicle"
 </div>
 
 </div>
+
+)}
+
+{/* NO VEHICLE DETECTED MODAL */}
+{showNoMatchModal && (
+
+  <div className="custom-modal-overlay">
+
+    <div className="custom-modal">
+
+      <h3>No Vehicle Detected</h3>
+
+      <p>
+        No vehicle with the corresponding register number was detected in the
+        selected camera feeds.
+      </p>
+
+      <button
+        className="btn btn-primary"
+        onClick={() => setShowNoMatchModal(false)}
+      >
+        Close
+      </button>
+
+    </div>
+
+  </div>
 
 )}
 

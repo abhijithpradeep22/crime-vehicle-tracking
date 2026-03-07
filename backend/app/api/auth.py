@@ -5,7 +5,9 @@ router = APIRouter()
 
 FAKE_USERS = {
     "officer1": {"password": "1234", "user_id": 1},
-    "admin": {"password": "admin123", "user_id": 2}
+    "officer2": {"password": "officer2123", "user_id": 2},
+    "officer3": {"password": "officer3123", "user_id": 3},
+    "officer4": {"password": "officer4123", "user_id": 4}
 }
 
 class LoginRequest(BaseModel):

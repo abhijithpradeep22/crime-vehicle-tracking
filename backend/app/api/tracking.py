@@ -41,9 +41,17 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
 
     all_videos = [
         ("data/videos/IMG_1178.mp4", "CAM_001", datetime(2026, 2, 4, 8, 30, 0)),
-        ("data/videos/IMG_1179.mp4", "CAM_002", datetime(2026, 2, 4, 10, 15, 0)),
-        ("data/videos/IMG_1180.mp4", "CAM_003", datetime(2026, 2, 4, 13, 45, 0)),
-        ("data/videos/IMG_1182.mp4", "CAM_004", datetime(2026, 2, 4, 17, 10, 0)),
+        ("data/videos/IMG_1179.mp4", "CAM_002", datetime(2026, 2, 4, 9, 10, 0)),
+        ("data/videos/IMG_1180.mp4", "CAM_003", datetime(2026, 2, 4, 9, 30, 0)),
+        ("data/videos/IMG_1182.mp4", "CAM_004", datetime(2026, 2, 4, 10, 10, 0)),
+
+        ("data/videos/b_IMG_1365.mp4", "CAM_005", datetime(2026, 3, 2, 11, 10, 0)),
+        ("data/videos/b_IMG_1366.mp4", "CAM_008", datetime(2026, 3, 2, 11, 30, 0)),
+        ("data/videos/b_IMG_1367.mp4", "CAM_012", datetime(2026, 3, 2, 11, 40, 0)),
+        ("data/videos/b_IMG_1368.mp4", "CAM_016", datetime(2026, 3, 2, 11, 55, 0)),
+        ("data/videos/b_IMG_1370.mp4", "CAM_020", datetime(2026, 3, 2, 12, 10, 0)),
+        ("data/videos/b_IMG_1372.mp4", "CAM_024", datetime(2026, 3, 2, 12, 35, 0)),
+
     ]
 
     if payload.camera_ids:
@@ -102,35 +110,15 @@ def get_latest(case_id: int):
 
     try:
 
-        session = db.query(TrackingSession).filter(
-            TrackingSession.case_id == case_id
-        ).first()
-
-        if not session:
-            return {"message": "No tracking session found"}
-
-        latest_sighting = (
-            db.query(VehicleSighting)
-            .filter(VehicleSighting.tracking_session_id == session.id)
-            .order_by(desc(VehicleSighting.event_time))
+        session = (
+            db.query(TrackingSession)
+            .filter(TrackingSession.case_id == case_id)
+            .order_by(TrackingSession.id.desc())
             .first()
         )
 
-        latest_camera = None
-        latest_location = None
-        latest_time = None
-
-        if latest_sighting:
-            latest_camera = latest_sighting.camera_id
-
-            camera = db.query(Camera).filter(
-                Camera.camera_id == latest_camera
-            ).first()
-
-            if camera:
-                latest_location = camera.location
-
-            latest_time = latest_sighting.event_time
+        if not session:
+            return {"message": "No tracking session found"}
 
         return {
             "target_plate": session.target_plate,
@@ -139,13 +127,14 @@ def get_latest(case_id: int):
             "first_location": session.first_location,
             "first_event_time": session.first_event_time,
 
-            "latest_camera": latest_camera,
-            "latest_location": latest_location,
-            "latest_event_time": latest_time,
+            "latest_camera": session.latest_camera,
+            "latest_location": session.latest_location,
+            "latest_event_time": session.latest_event_time,
 
             "total_cameras": session.total_cameras,
             "completed_cameras": session.completed_cameras,
 
+            "match_found": session.match_found,
             "status": session.status
         }
 

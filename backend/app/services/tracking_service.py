@@ -27,21 +27,7 @@ def _run_tracking_for_camera(
             tracking_session_id=tracking_session_id,
         )
 
-        db: Session = SessionLocal()
-
-        session = db.query(TrackingSession).filter(
-            TrackingSession.id == tracking_session_id
-        ).first()
-
-        if session:
-
-            # Safe increment
-            session.completed_cameras = (session.completed_cameras or 0) + 1
-            print("Tracking session marked as completed")
-
-            db.commit()
-
-        db.close()
+        print(f"Camera {camera_id} processing finished")
 
     except Exception as e:
 
@@ -51,6 +37,7 @@ def _run_tracking_for_camera(
 def start_tracking(case_id: int, target_plate: str, videos: list):
 
     print("Tracking requested for case:", case_id)
+    print("Target number plate:", target_plate)
 
     db: Session = SessionLocal()
 
@@ -69,8 +56,9 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
         case_id=case_id,
         target_plate=target_plate,
         status="active",
-        total_cameras=len(videos),  # important for selected cameras
+        total_cameras=len(videos),  #for selected cameras
         completed_cameras=0,
+        match_found=False,
     )
 
     db.add(session)

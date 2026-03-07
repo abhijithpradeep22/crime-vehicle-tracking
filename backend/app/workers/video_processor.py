@@ -256,6 +256,8 @@ def process_video(
 
                             if first_updated or latest_updated:
 
+                                tracking_session.match_found = True
+
                                 db.commit()
 
                                 print(
@@ -266,6 +268,23 @@ def process_video(
             db.commit()
 
     db.commit()
+
+    # -------- CAMERA FINISHED -------- #
+
+    if tracking_session_id:
+        session = db.query(TrackingSession).filter(
+            TrackingSession.id == tracking_session_id
+        ).first()
+
+        if session:
+
+            session.completed_cameras += 1
+
+            if session.completed_cameras >= session.total_cameras:
+                session.status = "completed"
+                print("Tracking session marked as completed")
+
+            db.commit()
 
     cap.release()
     db.close()
