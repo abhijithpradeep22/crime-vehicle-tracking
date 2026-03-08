@@ -22,11 +22,21 @@ plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 # ---------------- CONFIG ---------------- #
 
 VEHICLE_CLASSES = {2, 3, 5, 7}
-FRAME_SKIP = 20
 COOLDOWN_SECONDS = 5
 
 last_seen_plates = {}
 last_tracking_update = {}
+
+# ---------------- PERFORMANCE CONFIG ---------------- #
+
+DETECTION_WIDTH = 1280
+DETECTION_HEIGHT = 720
+
+FRAME_SKIP = 20
+VEHICLE_CONF = 0.45
+PLATE_CONF = 0.5
+
+MIN_VEHICLE_AREA = 15000
 
 
 # ---------------- MAIN PROCESS FUNCTION ---------------- #
@@ -78,6 +88,16 @@ def process_video(
         if not ret:
             break
 
+        # keep original frame for snapshots
+        original_frame = frame
+
+        # resize frame for detection (much faster)
+        frame = cv2.resize(frame, (DETECTION_WIDTH, DETECTION_HEIGHT))
+
+        # scale factors to map detection back to original frame
+        scale_x = original_frame.shape[1] / DETECTION_WIDTH
+        scale_y = original_frame.shape[0] / DETECTION_HEIGHT
+
         frame_count += 1
         stop_check_counter += 1
 
@@ -97,7 +117,7 @@ def process_video(
         if frame_count % FRAME_SKIP != 0:
             continue
 
-        results = model(frame, conf=0.45, iou=0.45, verbose=False)
+        results = model(frame, conf=VEHICLE_CONF, iou=0.45, verbose=False)
 
         for r in results:
 
@@ -108,20 +128,33 @@ def process_video(
                 if cls_id not in VEHICLE_CLASSES:
                     continue
 
-                if float(box.conf[0]) < 0.5:
+                if float(box.conf[0]) < VEHICLE_CONF:
                     continue
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
+                # scale coordinates to original frame
+                x1 = int(x1 * scale_x)
+                x2 = int(x2 * scale_x)
+                y1 = int(y1 * scale_y)
+                y2 = int(y2 * scale_y)
+
                 if x2 <= x1 or y2 <= y1:
                     continue
 
-                vehicle_crop = frame[y1:y2, x1:x2]
+
+
+                vehicle_crop = original_frame[y1:y2, x1:x2]
 
                 if vehicle_crop.size == 0:
                     continue
 
-                plate_results = plate_model(vehicle_crop, conf=0.4, verbose=False)
+                vehicle_area = (x2 - x1) * (y2 - y1)
+
+                if vehicle_area < MIN_VEHICLE_AREA:
+                    continue
+
+                plate_results = plate_model(vehicle_crop, conf=PLATE_CONF, verbose=False)
 
                 for pr in plate_results:
 
@@ -129,6 +162,9 @@ def process_video(
                         continue
 
                     for pbox in pr.boxes:
+
+                        if float(pbox.conf[0]) < PLATE_CONF:
+                            continue
 
                         px1, py1, px2, py2 = map(int, pbox.xyxy[0])
 
@@ -151,7 +187,7 @@ def process_video(
 
                         plate_text = plate_text.upper().replace(" ", "")
 
-                        if plate_conf < 0.5 or float(box.conf[0]) < 0.6:
+                        if plate_conf < PLATE_CONF or float(box.conf[0]) < VEHICLE_CONF:
                             continue
 
                         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -174,14 +210,30 @@ def process_video(
 
                         vehicle_type = model.names[cls_id]
 
-                        frame_copy = frame.copy()
+                        context_padding = 200
 
-                        cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        h, w = original_frame.shape[:2]
+
+                        cx1 = max(0, x1 - context_padding)
+                        cy1 = max(0, y1 - context_padding)
+                        cx2 = min(w, x2 + context_padding)
+                        cy2 = min(h, y2 + context_padding)
+
+                        frame_copy = original_frame[cy1:cy2, cx1:cx2].copy()
+
+                        # draw box relative to cropped evidence frame
+                        cv2.rectangle(
+                            frame_copy,
+                            (x1 - cx1, y1 - cy1),
+                            (x2 - cx1, y2 - cy1),
+                            (0,255,0),
+                            2
+                        )
 
                         cv2.putText(
                             frame_copy,
                             plate_text,
-                            (x1, y1 - 10),
+                            (x1 - cx1, y1 - cy1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.6,
                             (0, 255, 0),

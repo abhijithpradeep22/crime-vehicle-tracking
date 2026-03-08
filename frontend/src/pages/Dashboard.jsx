@@ -38,7 +38,7 @@ export default function Dashboard() {
   const [historyMode, setHistoryMode] = useState(false);
 
   const navigate = useNavigate();
-  const [routeStops, setRouteStops] = useState([]);
+
 
   /* LOAD USER */
 
@@ -341,16 +341,22 @@ export default function Dashboard() {
 
 
   const route = setInterval(async () => {
-
     try {
 
       const data = await apiRequest(`/tracking/route/${caseId}`);
-      setRouteData(data);
-      setRouteStops(data.stops);
 
-    } catch {}
+      if (data?.stops) {
+        setRouteData({
+          ...data,
+          stops: [...data.stops]
+        });
+      }
 
-  }, 9000);
+    } catch (err) {
+      console.error("Route polling error:", err);
+    }
+
+  }, 4000);
 
   setLivePolling(live);
   setRoutePolling(route);
@@ -371,17 +377,6 @@ export default function Dashboard() {
     navigate("/");
 
   };
-
-  const loadRoute = async (caseId) => {
-    const data = await apiRequest(`/tracking/route/${caseId}`);
-    setRouteStops(data.stops);
-  };
-  useEffect(() => {
-    if (selectedCase) {
-      loadRoute(selectedCase.id);
-    }
-  }, [selectedCase]);
-
 
   const filteredCases = cases.filter(c =>
     c.target_vehicle.toLowerCase().includes(caseSearch.toLowerCase())
@@ -666,7 +661,9 @@ View Sighting
 </div>
 
 <div className="map-panel">
-  {routeStops?.length > 0 && <RouteMap stops={routeStops} />}
+  {routeData?.stops?.length > 0 && (
+    <RouteMap stops={routeData.stops} />
+  )}
 </div>
 
 {/* INVESTIGATION REPORT */}

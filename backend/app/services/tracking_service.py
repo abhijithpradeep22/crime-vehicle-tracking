@@ -1,9 +1,14 @@
 from multiprocessing import Process
 from sqlalchemy.orm import Session
+import time
 
 from backend.app.db.session import SessionLocal
 from backend.app.models.tracking_session import TrackingSession
 from backend.app.workers.video_processor import process_video
+
+
+MAX_PARALLEL_CAMERAS = 4
+
 
 def _run_tracking_for_camera(
     video_path,
@@ -56,7 +61,7 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
         case_id=case_id,
         target_plate=target_plate,
         status="active",
-        total_cameras=len(videos),  #for selected cameras
+        total_cameras=len(videos),
         completed_cameras=0,
         match_found=False,
     )
@@ -72,10 +77,20 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
 
     db.close()
 
-    # -------- Spawn camera processes --------
+    # -------- Controlled parallel processing --------
     processes = []
+    active_processes = []
 
     for video_path, camera_id, start_time in videos:
+
+        # Wait if max parallel cameras running
+        while len(active_processes) >= MAX_PARALLEL_CAMERAS:
+
+            for p in active_processes:
+                if not p.is_alive():
+                    active_processes.remove(p)
+
+            time.sleep(1)
 
         print(f"Launching process for {camera_id}")
 
@@ -92,7 +107,9 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
         )
 
         p.start()
+
         processes.append(p)
+        active_processes.append(p)
 
     print("All camera processes started")
 

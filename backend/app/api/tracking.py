@@ -58,6 +58,13 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
         ("data/videos/t_IMG_1360.mp4", "CAM_010", datetime(2026, 3, 6, 14, 20, 0)),
         ("data/videos/t_IMG_1398.mp4", "CAM_011", datetime(2026, 3, 6, 15, 15, 0)),
 
+        ("data/videos/s_IMG_1392.mp4", "CAM_013", datetime(2026, 6, 3, 12, 00, 0)),
+        ("data/videos/s_IMG_1393.mp4", "CAM_014", datetime(2026, 6, 3, 12, 20, 0)),
+        ("data/videos/s_IMG_1394.mp4", "CAM_015", datetime(2026, 6, 3, 12, 45, 0)),
+        ("data/videos/s_IMG_1395.mp4", "CAM_017", datetime(2026, 6, 3, 13, 10, 0)),
+        ("data/videos/s_IMG_1396.mp4", "CAM_018", datetime(2026, 6, 3, 13, 35, 0)),
+        ("data/videos/s_IMG_1397.mp4", "CAM_019", datetime(2026, 6, 3, 14, 10, 0)),
+
 
     ]
 

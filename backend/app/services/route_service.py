@@ -30,7 +30,10 @@ def build_live_route(
     sightings = (
         db.query(VehicleSighting)
         .filter(VehicleSighting.tracking_session_id == session.id)
-        .order_by(asc(VehicleSighting.event_time))
+        .order_by(
+            asc(VehicleSighting.event_time),
+            asc(VehicleSighting.id)
+        )
         .all()
     )
 
