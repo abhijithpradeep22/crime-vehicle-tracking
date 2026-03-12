@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Float
 from backend.app.db.base import Base
 
 
@@ -21,6 +21,8 @@ class TrackingSession(Base):
 
     total_cameras = Column(Integer, default=0)
     completed_cameras = Column(Integer, default=0)
+
+    latest_confidence = Column(Float, nullable=True)
 
     match_found = Column(Boolean, default=False)
     status = Column(String, default="running")

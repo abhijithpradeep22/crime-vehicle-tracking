@@ -8,7 +8,11 @@ FAKE_USERS = {
     "officer2": {"password": "officer2123", "user_id": 2},
     "officer3": {"password": "officer3123", "user_id": 3},
     "officer4": {"password": "officer4123", "user_id": 4},
-    "officer5": {"password": "officer5123", "user_id": 5}
+    "officer5": {"password": "officer5123", "user_id": 5},
+    "officer6": {"password": "officer6123", "user_id": 6},
+    "officer7": {"password": "officer7123", "user_id": 7},
+    "officer8": {"password": "officer8123", "user_id": 8},
+    "officer9": {"password": "officer9123", "user_id": 9},
 }
 
 class LoginRequest(BaseModel):

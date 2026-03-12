@@ -113,4 +113,24 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
 
     print("All camera processes started")
 
+    # Wait for all processes to finish
+    for p in processes:
+        p.join()
+
+    print("All camera processes completed")
+
+    # Final safety check
+    db: Session = SessionLocal()
+
+    session = db.query(TrackingSession).filter(
+        TrackingSession.id == tracking_session_id
+    ).first()
+
+    if session and session.completed_cameras >= session.total_cameras:
+        session.status = "completed"
+        db.commit()
+        print("Tracking session marked as completed (final check)")
+
+    db.close()
+
     return tracking_session_id

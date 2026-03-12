@@ -1,5 +1,7 @@
 import cv2
 import os
+from sqlalchemy import or_
+from sqlalchemy import text
 from ultralytics import YOLO
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -22,21 +24,11 @@ plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 # ---------------- CONFIG ---------------- #
 
 VEHICLE_CLASSES = {2, 3, 5, 7}
+FRAME_SKIP = 3
 COOLDOWN_SECONDS = 5
 
 last_seen_plates = {}
 last_tracking_update = {}
-
-# ---------------- PERFORMANCE CONFIG ---------------- #
-
-DETECTION_WIDTH = 1280
-DETECTION_HEIGHT = 720
-
-FRAME_SKIP = 20
-VEHICLE_CONF = 0.45
-PLATE_CONF = 0.5
-
-MIN_VEHICLE_AREA = 15000
 
 
 # ---------------- MAIN PROCESS FUNCTION ---------------- #
@@ -88,16 +80,6 @@ def process_video(
         if not ret:
             break
 
-        # keep original frame for snapshots
-        original_frame = frame
-
-        # resize frame for detection (much faster)
-        frame = cv2.resize(frame, (DETECTION_WIDTH, DETECTION_HEIGHT))
-
-        # scale factors to map detection back to original frame
-        scale_x = original_frame.shape[1] / DETECTION_WIDTH
-        scale_y = original_frame.shape[0] / DETECTION_HEIGHT
-
         frame_count += 1
         stop_check_counter += 1
 
@@ -117,7 +99,7 @@ def process_video(
         if frame_count % FRAME_SKIP != 0:
             continue
 
-        results = model(frame, conf=VEHICLE_CONF, iou=0.45, verbose=False)
+        results = model(frame, conf=0.45, iou=0.45, verbose=False)
 
         for r in results:
 
@@ -128,33 +110,20 @@ def process_video(
                 if cls_id not in VEHICLE_CLASSES:
                     continue
 
-                if float(box.conf[0]) < VEHICLE_CONF:
+                if float(box.conf[0]) < 0.5:
                     continue
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-                # scale coordinates to original frame
-                x1 = int(x1 * scale_x)
-                x2 = int(x2 * scale_x)
-                y1 = int(y1 * scale_y)
-                y2 = int(y2 * scale_y)
-
                 if x2 <= x1 or y2 <= y1:
                     continue
 
-
-
-                vehicle_crop = original_frame[y1:y2, x1:x2]
+                vehicle_crop = frame[y1:y2, x1:x2]
 
                 if vehicle_crop.size == 0:
                     continue
 
-                vehicle_area = (x2 - x1) * (y2 - y1)
-
-                if vehicle_area < MIN_VEHICLE_AREA:
-                    continue
-
-                plate_results = plate_model(vehicle_crop, conf=PLATE_CONF, verbose=False)
+                plate_results = plate_model(vehicle_crop, conf=0.4, verbose=False)
 
                 for pr in plate_results:
 
@@ -162,9 +131,6 @@ def process_video(
                         continue
 
                     for pbox in pr.boxes:
-
-                        if float(pbox.conf[0]) < PLATE_CONF:
-                            continue
 
                         px1, py1, px2, py2 = map(int, pbox.xyxy[0])
 
@@ -186,8 +152,10 @@ def process_video(
                             continue
 
                         plate_text = plate_text.upper().replace(" ", "")
+                        if len(plate_text) < 6 or len(plate_text) > 10:
+                            continue
 
-                        if plate_conf < PLATE_CONF or float(box.conf[0]) < VEHICLE_CONF:
+                        if plate_conf < 0.5 or float(box.conf[0]) < 0.6:
                             continue
 
                         fps = cap.get(cv2.CAP_PROP_FPS)
@@ -210,30 +178,14 @@ def process_video(
 
                         vehicle_type = model.names[cls_id]
 
-                        context_padding = 200
+                        frame_copy = frame.copy()
 
-                        h, w = original_frame.shape[:2]
-
-                        cx1 = max(0, x1 - context_padding)
-                        cy1 = max(0, y1 - context_padding)
-                        cx2 = min(w, x2 + context_padding)
-                        cy2 = min(h, y2 + context_padding)
-
-                        frame_copy = original_frame[cy1:cy2, cx1:cx2].copy()
-
-                        # draw box relative to cropped evidence frame
-                        cv2.rectangle(
-                            frame_copy,
-                            (x1 - cx1, y1 - cy1),
-                            (x2 - cx1, y2 - cy1),
-                            (0,255,0),
-                            2
-                        )
+                        cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
                         cv2.putText(
                             frame_copy,
                             plate_text,
-                            (x1 - cx1, y1 - cy1 - 10),
+                            (x1, y1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.6,
                             (0, 255, 0),
@@ -278,68 +230,106 @@ def process_video(
 
                         db.add(sighting)
 
-                        if tracking_session and plate_text == tracking_session.target_plate:
+                        # ---------- TRACKING UPDATE ----------
+
+                        if tracking_session and is_similar_plate(
+                            plate_text,
+                            tracking_session.target_plate,
+                            threshold=0.9
+                        ):
+
+                            session_check = db.query(TrackingSession).filter(
+                                TrackingSession.id == tracking_session_id
+                            ).first()
 
                             first_updated = False
-                            latest_updated = False
 
                             # FIRST detection
                             if (
-                                tracking_session.first_event_time is None
-                                or event_time < tracking_session.first_event_time
+                                session_check.first_event_time is None
+                                or event_time < session_check.first_event_time
                             ):
-                                tracking_session.first_event_time = event_time
-                                tracking_session.first_camera = camera_id
-                                tracking_session.first_location = camera.location
+                                session_check.first_event_time = event_time
+                                session_check.first_camera = camera_id
+                                session_check.first_location = camera.location
+                                session_check.match_found = True
                                 first_updated = True
 
-                            # LATEST detection (correct logic)
-                            if (
-                                tracking_session.latest_event_time is None
-                                or event_time > tracking_session.latest_event_time
-                            ):
-                                tracking_session.latest_event_time = event_time
-                                tracking_session.latest_camera = camera_id
-                                tracking_session.latest_location = camera.location
-                                latest_updated = True
+                            # ATOMIC LATEST UPDATE
+                            key = (camera_id, tracking_session_id)
 
-                            if first_updated or latest_updated:
+                            if key in last_tracking_update:
+                                if (now - last_tracking_update[key]).total_seconds() < 10:
+                                    continue
 
-                                key = (camera_id, tracking_session.target_plate)
+                            update_count = 0
 
-                                if key in last_tracking_update:
-                                    if (now - last_tracking_update[key]).total_seconds() < 10:
-                                        continue
+                            for _ in range(3):
+                                try:
 
-                                last_tracking_update[key] = now
+                                    update_count = db.query(TrackingSession).filter(
+                                        TrackingSession.id == tracking_session_id,
+                                        or_(
+                                            TrackingSession.latest_event_time == None,
+                                            TrackingSession.latest_event_time < event_time
+                                        )
+                                    ).update({
+                                        "latest_event_time": event_time,
+                                        "latest_camera": camera_id,
+                                        "latest_location": camera.location,
+                                        "match_found": True
+                                    })
 
-                                tracking_session.match_found = True
+                                    db.commit()
 
-                                db.commit()
+                                    if update_count > 0:
+                                        last_tracking_update[key] = now
+
+                                    break
+
+                                except Exception:
+                                    db.rollback()
 
                             print(f"[TRACKING UPDATED] {camera_id} @ {event_time}")
 
         if frame_count % 100 == 0:
-            db.commit()
+            for _ in range(3):
+                try:
+                    db.commit()
+                    break
+                except Exception:
+                    db.rollback()
 
-    db.commit()
+    for _ in range(3):
+        try:
+            db.commit()
+            break
+        except Exception:
+            db.rollback()
 
     # -------- CAMERA FINISHED -------- #
 
-    if tracking_session_id:
-        session = db.query(TrackingSession).filter(
-            TrackingSession.id == tracking_session_id
-        ).first()
+    db.execute(
+        text(
+            """
+            UPDATE tracking_sessions
+            SET completed_cameras = completed_cameras + 1
+            WHERE id = :session_id
+            """
+        ),
+        {"session_id": tracking_session_id}
+    )
 
-        if session:
+    db.commit()
 
-            session.completed_cameras += 1
+    session = db.query(TrackingSession).filter(
+        TrackingSession.id == tracking_session_id
+    ).first()
 
-            if session.completed_cameras >= session.total_cameras:
-                session.status = "completed"
-                print("Tracking session marked as completed")
-
-            db.commit()
+    if session.completed_cameras >= session.total_cameras:
+        session.status = "completed"
+        db.commit()
+        print("Tracking session marked as completed")
 
     cap.release()
     db.close()

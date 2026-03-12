@@ -40,10 +40,11 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
         }
 
     all_videos = [
-        ("data/videos/IMG_1178.mp4", "CAM_001", datetime(2026, 2, 4, 8, 30, 0)),
-        ("data/videos/IMG_1179.mp4", "CAM_002", datetime(2026, 2, 4, 9, 10, 0)),
-        ("data/videos/IMG_1180.mp4", "CAM_003", datetime(2026, 2, 4, 9, 30, 0)),
-        ("data/videos/IMG_1182.mp4", "CAM_004", datetime(2026, 2, 4, 10, 10, 0)),
+
+        ("data/videos/vv_IMG_1447.mp4", "CAM_001", datetime(2026, 2, 4, 8, 30, 0)),
+        ("data/videos/vv_IMG_1446.mp4", "CAM_002", datetime(2026, 2, 4, 9, 10, 0)),
+        ("data/videos/vv_IMG_1442.mp4", "CAM_003", datetime(2026, 2, 4, 9, 30, 0)),
+        ("data/videos/vv_IMG_1443.mp4", "CAM_004", datetime(2026, 2, 4, 10, 10, 0)),
 
         ("data/videos/b_IMG_1365.mp4", "CAM_005", datetime(2026, 3, 2, 11, 10, 0)),
         ("data/videos/b_IMG_1366.mp4", "CAM_008", datetime(2026, 3, 2, 11, 30, 0)),
@@ -54,18 +55,16 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
 
         ("data/videos/t_IMG_1352.mp4", "CAM_006", datetime(2026, 3, 6, 13, 15, 0)),
         ("data/videos/t_IMG_1353.mp4", "CAM_007", datetime(2026, 3, 6, 13, 45, 0)),
-        ("data/videos/t_IMG_1356.mp4", "CAM_009", datetime(2026, 3, 6, 14, 00, 0)),
+        ("data/videos/t_IMG_1356.mp4", "CAM_009", datetime(2026, 3, 6, 14, 0, 0)),
         ("data/videos/t_IMG_1360.mp4", "CAM_010", datetime(2026, 3, 6, 14, 20, 0)),
         ("data/videos/t_IMG_1398.mp4", "CAM_011", datetime(2026, 3, 6, 15, 15, 0)),
 
-        ("data/videos/s_IMG_1392.mp4", "CAM_013", datetime(2026, 6, 3, 12, 00, 0)),
+        ("data/videos/s_IMG_1392.mp4", "CAM_013", datetime(2026, 6, 3, 12, 0, 0)),
         ("data/videos/s_IMG_1393.mp4", "CAM_014", datetime(2026, 6, 3, 12, 20, 0)),
         ("data/videos/s_IMG_1394.mp4", "CAM_015", datetime(2026, 6, 3, 12, 45, 0)),
         ("data/videos/s_IMG_1395.mp4", "CAM_017", datetime(2026, 6, 3, 13, 10, 0)),
         ("data/videos/s_IMG_1396.mp4", "CAM_018", datetime(2026, 6, 3, 13, 35, 0)),
         ("data/videos/s_IMG_1397.mp4", "CAM_019", datetime(2026, 6, 3, 14, 10, 0)),
-
-
     ]
 
     if payload.camera_ids:

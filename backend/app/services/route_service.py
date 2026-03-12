@@ -56,7 +56,7 @@ def build_live_route(
 
     for s in sightings:
 
-        if not is_similar_plate(s.plate_number, target_plate, threshold=0.95):
+        if not is_similar_plate(s.plate_number, target_plate, threshold=0.85):
             continue
 
         cam = camera_map.get(s.camera_id)

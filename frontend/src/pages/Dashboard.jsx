@@ -146,6 +146,15 @@ export default function Dashboard() {
 
       await loadReports(caseId);
 
+      const route = await apiRequest(`/tracking/route/${caseId}`);
+
+      if (route?.stops) {
+        setRouteData({
+          ...route,
+          stops: [...route.stops]
+        });
+      }
+
       const latest = await apiRequest(`/tracking/latest/${caseId}`);
 
       if (latest && latest.status === "running") {
@@ -317,31 +326,40 @@ export default function Dashboard() {
 
   const live = setInterval(async () => {
 
-  try {
+    try {
 
-    const latest = await apiRequest(`/tracking/latest/${caseId}`);
-    setTrackingInfo(latest);
+      const latest = await apiRequest(`/tracking/latest/${caseId}`);
+      setTrackingInfo(latest);
 
-    if (latest.status === "completed") {
+      if (latest.status === "completed") {
 
-      clearInterval(live);
-      clearInterval(route);
+        clearInterval(live);
+        clearInterval(route);
 
-      if (!latest.match_found) {
-        setShowNoMatchModal(true);
+        if (!latest.match_found) {
+          setShowNoMatchModal(true);
+        }
+
       }
-
-    }
 
     } catch (err) {
       console.error(err);
     }
 
-  }, 3000);
+  }, 4000);
 
 
   const route = setInterval(async () => {
+
     try {
+
+      const latest = await apiRequest(`/tracking/latest/${caseId}`);
+
+      // STOP ROUTE POLLING WHEN TRACKING FINISHES
+      if (latest.status === "completed") {
+        clearInterval(route);
+        return;
+      }
 
       const data = await apiRequest(`/tracking/route/${caseId}`);
 
@@ -356,7 +374,7 @@ export default function Dashboard() {
       console.error("Route polling error:", err);
     }
 
-  }, 4000);
+  }, 6000);
 
   setLivePolling(live);
   setRoutePolling(route);
@@ -668,7 +686,7 @@ View Sighting
 
 {/* INVESTIGATION REPORT */}
 
-{selectedReport && (
+{historyMode && selectedReport &&  (
 
 <div className="report-view">
 

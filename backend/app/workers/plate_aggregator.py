@@ -21,11 +21,6 @@ LETTER_MAP = {
     '8': 'B'
 }
 
-
-# ---------------------------------------------------
-# 1️⃣  NORMALIZATION
-# ---------------------------------------------------
-
 def normalize_plate(raw: str) -> str:
     if not raw:
         return ""
@@ -42,9 +37,6 @@ def normalize_plate(raw: str) -> str:
     return "".join(normalized)
 
 
-# ---------------------------------------------------
-# 2️⃣  FUZZY SIMILARITY
-# ---------------------------------------------------
 
 def similarity_score(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
@@ -56,9 +48,6 @@ def is_similar_plate(a: str, b: str, threshold: float = 0.80) -> bool:
     return similarity_score(a, b) >= threshold
 
 
-# ---------------------------------------------------
-# 3️⃣  RESOLVE FINAL PLATE
-# ---------------------------------------------------
 
 def resolve_plate_variants(normalized_versions: list[str]):
     """
@@ -87,9 +76,7 @@ def resolve_plate_variants(normalized_versions: list[str]):
 
     return primary_plate, variants
 
-# ---------------------------------------------------
-# 4️⃣  BUCKETED AGGREGATION
-# ---------------------------------------------------
+
 
 def aggregate_case_plates(db: Session, case_id: int):
 

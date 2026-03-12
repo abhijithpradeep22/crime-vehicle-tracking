@@ -46,7 +46,7 @@ def extract_plate(plate_img):
     final_text = "".join(texts)
     final_conf = sum(confs) / len(confs)
 
-    if len(final_text) >= 6:
+    if 4 <= len(final_text) <= 10:
         return final_text, float(final_conf)
 
     return None, None
