@@ -5,37 +5,13 @@ from backend.app.models.sighting import VehicleSighting
 from difflib import SequenceMatcher
 
 
-DIGIT_MAP = {
-    'O': '0',
-    'I': '1',
-    'Z': '2',
-    'S': '5',
-    'B': '8'
-}
-
-LETTER_MAP = {
-    '0': 'O',
-    '1': 'I',
-    '2': 'Z',
-    '5': 'S',
-    '8': 'B'
-}
-
 def normalize_plate(raw: str) -> str:
+    
     if not raw:
         return ""
 
     text = re.sub(r'[^A-Z0-9]', '', raw.upper())
-
-    normalized = []
-    for ch in text:
-        if ch in DIGIT_MAP:
-            normalized.append(DIGIT_MAP[ch])
-        else:
-            normalized.append(ch)
-
-    return "".join(normalized)
-
+    return text
 
 
 def similarity_score(a: str, b: str) -> float:
@@ -46,7 +22,6 @@ def is_similar_plate(a: str, b: str, threshold: float = 0.80) -> bool:
     if not a or not b:
         return False
     return similarity_score(a, b) >= threshold
-
 
 
 def resolve_plate_variants(normalized_versions: list[str]):
@@ -60,7 +35,6 @@ def resolve_plate_variants(normalized_versions: list[str]):
 
     counter = Counter(normalized_versions)
 
-    # Sort by frequency (highest first)
     sorted_variants = sorted(
         counter.items(),
         key=lambda x: x[1],
@@ -77,7 +51,6 @@ def resolve_plate_variants(normalized_versions: list[str]):
     return primary_plate, variants
 
 
-
 def aggregate_case_plates(db: Session, case_id: int):
 
     sightings = (
@@ -90,19 +63,17 @@ def aggregate_case_plates(db: Session, case_id: int):
     if not sightings:
         return []
 
-    # 🔹 Step 1: Normalize and bucket by prefix
     buckets = defaultdict(list)
 
     for s in sightings:
         norm = normalize_plate(s.plate_number)
 
-        # Bucket key: first 2 characters (safe heuristic)
-        key = norm[:2] if len(norm) >= 3 else norm
+        # bucket by first two characters (state code)
+        key = norm[:2] if len(norm) >= 2 else norm
         buckets[key].append((s, norm))
 
     aggregated = []
 
-    # 🔹 Step 2: Cluster inside each bucket
     for bucket in buckets.values():
 
         used = set()
@@ -141,7 +112,6 @@ def aggregate_case_plates(db: Session, case_id: int):
                 "last_seen": max(times),
                 "cameras": cameras
             })
-
 
     aggregated.sort(key=lambda x: x["count"], reverse=True)
     return aggregated

@@ -1,5 +1,6 @@
 import cv2
 import os
+import re
 from sqlalchemy import or_
 from sqlalchemy import text
 from ultralytics import YOLO
@@ -12,7 +13,7 @@ from backend.app.models.case import InvestigationCase
 from backend.app.models.sighting import VehicleSighting
 from backend.app.models.tracking_session import TrackingSession
 from backend.app.workers.anpr import extract_plate
-from backend.app.workers.plate_aggregator import is_similar_plate
+from backend.app.workers.plate_aggregator import is_similar_plate, normalize_plate
 
 
 # ---------------- MODEL LOADING ---------------- #
@@ -26,6 +27,8 @@ plate_model = YOLO("backend/app/models/license_plate_detector.pt")
 VEHICLE_CLASSES = {2, 3, 5, 7}
 FRAME_SKIP = 3
 COOLDOWN_SECONDS = 5
+
+INDIAN_PLATE_REGEX = re.compile(r"^[A-Z]{2}[0-9]{2}[A-Z]{0,2}[0-9]{1,4}$")
 
 last_seen_plates = {}
 last_tracking_update = {}
@@ -71,6 +74,9 @@ def process_video(
 
     frame_count = 0
     stop_check_counter = 0
+    best_frame = None
+    best_bbox = None
+    best_distance = float("inf")
 
     print(f"\nStarted processing {camera_id} at location: {camera.location}")
 
@@ -118,6 +124,17 @@ def process_video(
                 if x2 <= x1 or y2 <= y1:
                     continue
 
+                frame_center = frame.shape[1] / 2
+                bbox_center = (x1 + x2) / 2
+                distance = abs(frame_center - bbox_center)
+
+                if distance < best_distance:
+                    best_distance = distance
+                    best_frame = frame.copy()
+                    best_bbox = (x1, y1, x2, y2)
+
+                
+
                 vehicle_crop = frame[y1:y2, x1:x2]
 
                 if vehicle_crop.size == 0:
@@ -146,13 +163,23 @@ def process_video(
                         if plate_crop.size == 0:
                             continue
 
+                        # Upscale plate for better OCR
+                        plate_crop = cv2.resize(
+                            plate_crop,
+                            None,
+                            fx=2,
+                            fy=2,
+                            interpolation=cv2.INTER_CUBIC
+                        )
+
                         plate_text, plate_conf = extract_plate(plate_crop)
 
                         if plate_text is None or plate_conf is None:
                             continue
 
-                        plate_text = plate_text.upper().replace(" ", "")
-                        if len(plate_text) < 6 or len(plate_text) > 10:
+                        plate_text = normalize_plate(plate_text)
+
+                        if not INDIAN_PLATE_REGEX.match(plate_text):
                             continue
 
                         if plate_conf < 0.5 or float(box.conf[0]) < 0.6:
@@ -178,14 +205,16 @@ def process_video(
 
                         vehicle_type = model.names[cls_id]
 
-                        frame_copy = frame.copy()
+                        frame_copy = best_frame if best_frame is not None else frame.copy()
 
-                        cv2.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                        bx1, by1, bx2, by2 = best_bbox if best_bbox else (x1, y1, x2, y2)
+
+                        cv2.rectangle(frame_copy, (bx1, by1), (bx2, by2), (0, 255, 0), 2)
 
                         cv2.putText(
                             frame_copy,
                             plate_text,
-                            (x1, y1 - 10),
+                            (bx1, by1 - 10),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.6,
                             (0, 255, 0),
@@ -199,6 +228,9 @@ def process_video(
                         )
 
                         cv2.imwrite(vehicle_image_path, frame_copy)
+                        best_frame = None
+                        best_bbox = None
+                        best_distance = float("inf")
 
                         plate_filename = f"plate_{case_id}_{camera_id}_{frame_count}.jpg"
                         plate_image_path = os.path.join(
