@@ -83,8 +83,16 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
 
     for video_path, camera_id, start_time in videos:
 
+        if not is_tracking_active(tracking_session_id):
+            print("[STOP] Not launching remaining cameras")
+            break
+
         # Wait if max parallel cameras running
         while len(active_processes) >= MAX_PARALLEL_CAMERAS:
+
+            if not is_tracking_active(tracking_session_id):
+                print("[STOP] Breaking scheduler loop completely")
+                return tracking_session_id
 
             for p in active_processes:
                 if not p.is_alive():
@@ -134,3 +142,16 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
     db.close()
 
     return tracking_session_id
+
+
+def is_tracking_active(tracking_session_id):
+    db = SessionLocal()
+    try:
+        session = db.query(TrackingSession).filter(
+            TrackingSession.id == tracking_session_id
+        ).first()
+
+        return session and session.status == "active"
+
+    finally:
+        db.close()

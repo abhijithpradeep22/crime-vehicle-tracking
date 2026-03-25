@@ -37,6 +37,17 @@ export default function Dashboard() {
 
   const [historyMode, setHistoryMode] = useState(false);
 
+  const [autoLoading, setAutoLoading] = useState(false);
+
+  const [autoMode, setAutoMode] = useState(false);
+  const [locationInput, setLocationInput] = useState("");
+
+  const [cameraSearch, setCameraSearch] = useState("");
+
+  const [autoSelected, setAutoSelected] = useState([]);
+
+  
+
   const navigate = useNavigate();
 
 
@@ -100,6 +111,13 @@ export default function Dashboard() {
 
   };
 
+  /* CAMERA FILTER */
+
+  const filteredCameras = cameraList.filter(cam =>
+  cam.camera_id.toLowerCase().includes(cameraSearch.toLowerCase()) ||
+  cam.location.toLowerCase().includes(cameraSearch.toLowerCase())
+);
+
 
   /* LOAD REPORTS */
 
@@ -138,6 +156,7 @@ export default function Dashboard() {
       setRouteData(null);
       setSelectedReport(null);
       setSelectedCameras([]);
+      setAutoSelected([]);
 
       const caseData = cases.find(c => c.id === caseId);
 
@@ -191,7 +210,8 @@ export default function Dashboard() {
       const res = await apiRequest("/cases/", "POST", {
 
         user_id: Number(userId),
-        target_vehicle: vehicleNumber
+        target_vehicle: vehicleNumber,
+        incident_location: null
 
       });
 
@@ -213,43 +233,54 @@ export default function Dashboard() {
 
   };
 
+  
+
 
   /* START TRACKING */
 
   const startTracking = async () => {
 
-    if (!selectedCase) {
-      alert("Create or select a case first");
-      return;
+  if (!selectedCase) {
+    alert("Create or select a case first");
+    return;
+  }
+
+  
+  if (selectedCameras.length === 0 && autoSelected.length === 0) {
+    alert("No cameras selected. Please select cameras or use auto selection.");
+    return;
+  }
+
+  try {
+
+    const res = await apiRequest("/tracking/start", "POST", {
+      case_id: selectedCase.id,
+      target_plate: selectedCase.target_vehicle,
+      camera_ids: selectedCameras.length > 0 ? selectedCameras : null
+    });
+
+    if (selectedCameras.length === 0 && res.selected_cameras) {
+      setAutoSelected(res.selected_cameras);
+      setSelectedCameras(res.selected_cameras);
     }
 
-    if (selectedCameras.length === 0) {
-      alert("Select at least one camera");
-      return;
+    setTrackingStarted(true);
+    setNoMatchShown(false);
+
+    startPolling(selectedCase.id);
+
+  } catch (err) {
+
+    console.error(err);
+
+    if (err.response?.data?.detail) {
+      alert(err.response.data.detail);
+    } else {
+      alert("Failed to start tracking");
     }
 
-    try {
-
-      await apiRequest("/tracking/start", "POST", {
-
-        case_id: selectedCase.id,
-        target_plate: vehicleNumber,
-        camera_ids: selectedCameras
-
-      });
-
-      setTrackingStarted(true);
-      setNoMatchShown(false);
-
-      startPolling(selectedCase.id);
-
-    } catch (err) {
-
-      console.error(err);
-
-    }
-
-  };
+  }
+};
 
 
   /* STOP TRACKING */
@@ -270,6 +301,8 @@ export default function Dashboard() {
 
       setTrackingStarted(false);
       setTrackingInfo(null);
+      setAutoSelected([]);
+      setSelectedCameras([]);
 
       alert("Tracking stopped");
 
@@ -400,6 +433,43 @@ export default function Dashboard() {
     c.target_vehicle.toLowerCase().includes(caseSearch.toLowerCase())
   );
 
+
+
+  const handleAutoSelect = async () => {
+
+  if (!locationInput) {
+    alert("Enter a location");
+    return;
+  }
+
+  setAutoLoading(true);
+
+  try {
+
+    // Save location
+    await apiRequest(`/cases/${selectedCase.id}/location`, "POST", {
+      incident_location: locationInput
+    });
+
+    const res = await apiRequest(`/tracking/auto-select/${selectedCase.id}`);
+
+  if (!res.selected_cameras || res.selected_cameras.length === 0) {
+    alert("No nearby cameras found for this location");
+    setAutoSelected([]);
+    setSelectedCameras([]);
+    return;
+  }
+
+  setAutoSelected(res.selected_cameras);
+  setSelectedCameras(res.selected_cameras);
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to auto select cameras");
+  } finally {
+    setAutoLoading(false);
+  }
+};
 
   /* UI */
 
@@ -588,21 +658,105 @@ onClick={() => openCase(c.id)}
 </div>
 
 
+
+
 {/* CAMERA SECTION */}
 
-<div className="camera-section">
-
 <p className="section-title">Select Cameras</p>
+ {!selectedCase && (
+  <p style={{ color: "#c41230", margin: "10px 14px" }}>
+    Please register a case to enable camera selection
+  </p>
+)}
+
+<div className="auto-selection-panel">
+
+  <button
+    className={`btn btn-primary ${autoMode ? "btn-active" : ""}`}
+    disabled={!selectedCase}
+    onClick={() => {
+      if (!selectedCase) return;
+
+      setAutoMode(true);
+      setSelectedCameras([]);
+      setAutoSelected([]);
+      setLocationInput("");
+    }}
+  >
+    Automatic Camera Selection
+  </button>
+
+  <button
+    className={`btn btn-secondary ${!autoMode ? "btn-active" : ""}`}
+    disabled={!selectedCase}
+    onClick={() => {
+      if (!selectedCase) return;
+
+        setAutoMode(false);
+        setAutoSelected([]);
+
+        setLocationInput("");
+    }}
+  >
+    Manual Camera Selection
+  </button>
+
+</div>
+
+{autoMode && selectedCase &&  (
+  <div className="location-input-box">
+
+    <input
+      className="field-input location-input"
+      placeholder="Enter incident location"
+      value={locationInput}
+      onChange={(e) => setLocationInput(e.target.value)}
+    />
+
+    <button
+  className="btn btn-track"
+  onClick={handleAutoSelect}
+  disabled={autoLoading}
+>
+  {autoLoading ? "Saving..." : "Set Location"}
+</button>
+
+{selectedCase?.incident_location && (
+  <p style={{ color: "green", marginTop: "5px" }}>
+    Location set: {selectedCase.incident_location}
+  </p>
+)}
+
+  </div>
+)}
+
+
+
+
+
+<div className={`camera-section ${!selectedCase ? "disabled-section" : ""}`}>
+
+ 
+
+
+
+<input
+  className="field-input"
+  placeholder="Search cameras (ID or location)"
+  value={cameraSearch}
+  onChange={(e) => setCameraSearch(e.target.value)}
+/>
 
 <div className="camera-grid">
 
-{cameraList.map(cam => (
+{filteredCameras.map(cam => (
 
 <label
 key={cam.camera_id}
-className={`cam-chip ${
-selectedCameras.includes(cam.camera_id) ? "cam-chip--on" : ""
-}`}
+className={`cam-chip 
+  ${selectedCameras.includes(cam.camera_id) ? "cam-chip--on" : ""}
+  ${autoMode && autoSelected.includes(cam.camera_id) ? "auto-highlight" : ""}
+`}
 >
 
 <input

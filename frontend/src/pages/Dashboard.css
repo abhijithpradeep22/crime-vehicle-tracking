@@ -169,8 +169,9 @@ body {
 .field-input {
   width: 100%;
   padding: 10px 13px;
-  background: var(--surface);
-  border: 1px solid var(--border-mid);
+  margin: 10px 0 14px 0;
+  background: #e2e7f3; 
+  border: 1px solid rgba(26, 47, 110, 0.25);
   border-radius: 4px;
   color: var(--text-primary);
   font-family: 'Rajdhani', sans-serif;
@@ -178,13 +179,18 @@ body {
   font-weight: 600;
   letter-spacing: 0.06em;
   outline: none;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  transition: all 0.2s;
 }
 
 .field-input:focus {
+  background: #ffffff;
   border-color: var(--navy-600);
-  background: var(--white);
-  box-shadow: 0 0 0 3px rgba(26, 47, 110, 0.08);
+  box-shadow: 0 0 0 2px rgba(36, 64, 138, 0.15);
+}
+
+.field-input::placeholder {
+  color: rgba(11, 26, 59, 0.45);
+  font-weight: 500;
 }
 
 /* ── Buttons ─────────────────────────────────────── */
@@ -510,58 +516,63 @@ body {
 }
 
 /* ── Camera Section ──────────────────────────────── */
-.camera-section {
-  margin: 14px;
-  padding: 14px 18px;
-  background: var(--white);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .camera-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* even 5-column grid */
+  gap: 6px 10px;
 }
 
-/* Camera chip */
 .cam-chip {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
-  border: 1px solid var(--border-mid);
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   background: var(--surface);
-  font-family: 'Rajdhani', sans-serif;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   user-select: none;
-  min-width: 200px;
+  min-width: 0;           /* lets grid constrain the chip */
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.cam-chip input {
-  accent-color: var(--navy-700);
-  cursor: pointer;
+.cam-chip-id {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--navy-600);
+  flex-shrink: 0;
+}
+
+.cam-chip-loc {
+  overflow: hidden;
+  text-overflow: ellipsis; /* long names get clipped cleanly */
 }
 
 .cam-chip:hover {
-  border-color: var(--navy-300);
-  color: var(--text-primary);
-  background: var(--navy-50);
+  border-color: var(--navy-200);
+  background: var(--navy-100);
 }
 
 .cam-chip--on {
-  border-color: var(--red-500);
+  border-color: rgba(196, 18, 48, 0.35);
   background: var(--red-100);
   color: var(--red-700);
+}
+
+.disabled-section {
+  opacity: 0.5;
+  pointer-events: none; 
+  filter: grayscale(40%);
+}
+
+.camera-section .field-input {
+  margin: 12px 14px;
+  width: calc(100% - 28px);  
 }
 
 /* ── Map Panel ───────────────────────────────────── */
@@ -657,4 +668,68 @@ body {
   padding: 14px 0;
   text-align: center;
   letter-spacing: 0.1em;
+}
+
+.auto-highlight {
+  border: 2px solid #00c853;
+  background-color: rgba(0, 200, 83, 0.1);
+}
+
+/* Auto/Manual selection buttons */
+.auto-selection-panel {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 12px 14px;
+}
+
+.auto-selection-panel .btn {
+  width: auto;        
+  min-width: 220px;
+  padding: 10px 18px;
+}
+
+.btn-secondary {
+  background: var(--red-600);
+  border: 1px solid var(--red-700);
+  color: var(--white);
+  box-shadow: 0 2px 8px rgba(196, 18, 48, 0.25);
+}
+
+.btn-secondary:hover {
+  background: var(--red-700);
+  box-shadow: 0 4px 14px rgba(196, 18, 48, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-active {
+  outline: 2px solid var(--navy-300);
+  transform: scale(1.02);
+}
+
+.location-input-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 10px 0 8px;
+}
+
+.location-input-box p {
+  width: 100%;
+  text-align: center;
+}
+
+/* Input */
+.location-input {
+  width: 300px;
+  max-width: 70%;
+  margin: 0;
+  padding: 8px 12px;
+}
+
+/* Button next to input */
+.location-input-box .btn {
+  width: auto;
+  padding: 10px 16px;
 }

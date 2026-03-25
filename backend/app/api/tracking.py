@@ -5,10 +5,8 @@ from datetime import datetime
 from backend.app.services.tracking_service import start_tracking
 from backend.app.db.session import SessionLocal
 from backend.app.models.tracking_session import TrackingSession
-
-from sqlalchemy import desc
-from backend.app.models.sighting import VehicleSighting
-from backend.app.models.camera import Camera
+from backend.app.models.case import InvestigationCase
+from backend.app.services.camera_selection_service import auto_select_cameras
 
 
 router = APIRouter(prefix="/tracking", tags=["tracking"])
@@ -20,25 +18,76 @@ class TrackingRequest(BaseModel):
     camera_ids: list[str] | None = None
 
 
+@router.get("/auto-select/{case_id}")
+def get_auto_selected_cameras(case_id: int):
+
+    db = SessionLocal()
+
+    try:
+        case = db.query(InvestigationCase).filter(
+            InvestigationCase.id == case_id
+        ).first()
+
+        if not case:
+            raise HTTPException(status_code=404, detail="Case not found")
+
+        if case.incident_latitude is None or case.incident_longitude is None:
+            raise HTTPException(status_code=400, detail="Incident location not set")
+
+        selected_ids = auto_select_cameras(
+            case.incident_latitude,
+            case.incident_longitude
+        )
+
+        return {"selected_cameras": selected_ids}
+
+    finally:
+        db.close()
+
+
 # START TRACKING
 @router.post("/start")
 def start_tracking_endpoint(payload: TrackingRequest, background_tasks: BackgroundTasks):
 
     db = SessionLocal()
 
-    existing = db.query(TrackingSession).filter(
-        TrackingSession.case_id == payload.case_id
-    ).first()
+    try:
+        # -------- Check existing tracking --------
+        existing = db.query(TrackingSession).filter(
+            TrackingSession.case_id == payload.case_id
+        ).first()
 
-    db.close()
+        if existing:
+            return {
+                "message": "Tracking already exists for this case",
+                "session_id": existing.id,
+                "status": existing.status
+            }
 
-    if existing:
-        return {
-            "message": "Tracking already exists for this case",
-            "session_id": existing.id,
-            "status": existing.status
-        }
+        # -------- Get case --------
+        case = db.query(InvestigationCase).filter(
+            InvestigationCase.id == payload.case_id
+        ).first()
 
+        if not case:
+            raise HTTPException(status_code=404, detail="Case not found")
+        
+        # -------- Camera Selection Logic --------
+        if payload.camera_ids and len(payload.camera_ids) > 0:
+            selected_ids = payload.camera_ids
+        else:
+            if case.incident_latitude is None or case.incident_longitude is None:
+                raise HTTPException(status_code=400, detail="Incident location not set")
+
+            selected_ids = auto_select_cameras(
+                case.incident_latitude,
+                case.incident_longitude
+            )
+
+    finally:
+        db.close()
+
+    # -------- Video list --------
     all_videos = [
 
         ("data/videos/vv_IMG_1447.mp4", "CAM_001", datetime(2026, 2, 4, 8, 30, 0)),
@@ -67,13 +116,22 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
         ("data/videos/ss_IMG_1459.mp4", "CAM_019", datetime(2026, 6, 3, 14, 10, 0)),
     ]
 
-    if payload.camera_ids:
-        videos = [v for v in all_videos if v[1] in payload.camera_ids]
-    else:
-        videos = all_videos
+    
 
-    print("Selected cameras:", [v[1] for v in videos])
+    print(f"[SELECTION] Camera IDs: {selected_ids}")
 
+    # -------- Filter Videos --------
+    videos = [v for v in all_videos if v[1] in selected_ids]
+
+    if not videos:
+        raise HTTPException(
+            status_code=400,
+            detail="No nearby cameras found for this incident location"
+        )
+
+    print(f"[VIDEOS] Final cameras: {[v[1] for v in videos]}")
+
+    # -------- Start Background Tracking --------
     background_tasks.add_task(
         start_tracking,
         payload.case_id,
@@ -81,7 +139,10 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
         videos
     )
 
-    return {"message": "Tracking started"}
+    return {
+        "message": "Tracking started",
+        "selected_cameras": selected_ids  
+    }
 
 
 # STOP TRACKING
@@ -91,7 +152,6 @@ def stop_tracking(case_id: int):
     db = SessionLocal()
 
     try:
-
         session = (
             db.query(TrackingSession)
             .filter(
@@ -106,7 +166,6 @@ def stop_tracking(case_id: int):
             raise HTTPException(status_code=404, detail="No active tracking session")
 
         session.status = "stopped"
-
         db.commit()
 
         return {"message": "Tracking stopped"}
@@ -122,7 +181,6 @@ def get_latest(case_id: int):
     db = SessionLocal()
 
     try:
-
         session = (
             db.query(TrackingSession)
             .filter(TrackingSession.case_id == case_id)
@@ -135,18 +193,14 @@ def get_latest(case_id: int):
 
         return {
             "target_plate": session.target_plate,
-
             "first_camera": session.first_camera,
             "first_location": session.first_location,
             "first_event_time": session.first_event_time,
-
             "latest_camera": session.latest_camera,
             "latest_location": session.latest_location,
             "latest_event_time": session.latest_event_time,
-
             "total_cameras": session.total_cameras,
             "completed_cameras": session.completed_cameras,
-
             "match_found": session.match_found,
             "status": session.status
         }

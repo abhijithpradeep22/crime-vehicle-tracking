@@ -74,9 +74,7 @@ def process_video(
 
     frame_count = 0
     stop_check_counter = 0
-    best_frame = None
-    best_bbox = None
-    best_distance = float("inf")
+    
 
     print(f"\nStarted processing {camera_id} at location: {camera.location}")
 
@@ -123,15 +121,6 @@ def process_video(
 
                 if x2 <= x1 or y2 <= y1:
                     continue
-
-                frame_center = frame.shape[1] / 2
-                bbox_center = (x1 + x2) / 2
-                distance = abs(frame_center - bbox_center)
-
-                if distance < best_distance:
-                    best_distance = distance
-                    best_frame = frame.copy()
-                    best_bbox = (x1, y1, x2, y2)
 
                 
 
@@ -205,9 +194,8 @@ def process_video(
 
                         vehicle_type = model.names[cls_id]
 
-                        frame_copy = best_frame if best_frame is not None else frame.copy()
-
-                        bx1, by1, bx2, by2 = best_bbox if best_bbox else (x1, y1, x2, y2)
+                        frame_copy = frame.copy()
+                        bx1, by1, bx2, by2 = x1, y1, x2, y2
 
                         cv2.rectangle(frame_copy, (bx1, by1), (bx2, by2), (0, 255, 0), 2)
 
@@ -228,9 +216,6 @@ def process_video(
                         )
 
                         cv2.imwrite(vehicle_image_path, frame_copy)
-                        best_frame = None
-                        best_bbox = None
-                        best_distance = float("inf")
 
                         plate_filename = f"plate_{case_id}_{camera_id}_{frame_count}.jpg"
                         plate_image_path = os.path.join(

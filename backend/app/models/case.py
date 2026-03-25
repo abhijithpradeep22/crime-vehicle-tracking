@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
 from datetime import datetime
 from backend.app.db.base import Base
 
@@ -15,3 +15,7 @@ class InvestigationCase(Base):
     status = Column(String, default="active")
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    incident_location = Column(String, nullable=True)
+    incident_latitude = Column(Float, nullable=True)
+    incident_longitude = Column(Float, nullable=True)

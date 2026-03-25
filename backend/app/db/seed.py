@@ -6,10 +6,10 @@ def seed_cameras():
     db = SessionLocal()
 
     cameras = [
-        Camera(camera_id="CAM_001", location="Chinnakada", latitude=8.88846, longitude=76.58604),
-        Camera(camera_id="CAM_002", location="Mayyanadu", latitude=8.85247, longitude=76.64993),
-        Camera(camera_id="CAM_003", location="Mukkam", latitude=8.82842, longitude=76.64844),
-        Camera(camera_id="CAM_004", location="Paravur", latitude=8.81523, longitude=76.66745),
+        Camera(camera_id="CAM_001", location="Kesavadasapuram", latitude=8.5303, longitude=76.9384),
+        Camera(camera_id="CAM_002", location="Ulloor", latitude=8.5389, longitude=76.9276),
+        Camera(camera_id="CAM_003", location="Pattom", latitude=8.5226, longitude=76.9392),
+        Camera(camera_id="CAM_004", location="Murinjapalam", latitude=8.5350, longitude=76.9408),
         Camera(camera_id="CAM_005", location="Pathanamthitta", latitude=9.267292, longitude=76.794418),
         Camera(camera_id="CAM_008", location="Konni", latitude=9.231924, longitude=76.847834),
         Camera(camera_id="CAM_012", location="Vakayar", latitude=9.197236, longitude=76.850311),
