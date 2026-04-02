@@ -198,40 +198,39 @@ export default function Dashboard() {
 
   const createCase = async () => {
 
-    if (!vehicleNumber || vehicleNumber.trim() === "") {
+  const trimmed = vehicleNumber.trim();
 
-      alert("Vehicle number is required");
-      return;
+  // length validation
+  if (trimmed.length <= 4 || trimmed.length >= 11) {
+    alert("Vehicle number must be between 5 and 10 characters");
+    return;
+  }
 
-    }
+  try {
 
-    try {
+    const res = await apiRequest("/cases/", "POST", {
+      user_id: Number(userId),
+      target_vehicle: trimmed,
+      incident_location: null
+    });
 
-      const res = await apiRequest("/cases/", "POST", {
+    setSelectedCase(res);
+    setCases(prev => [res, ...prev]);
+    setHistoryMode(false);
 
-        user_id: Number(userId),
-        target_vehicle: vehicleNumber,
-        incident_location: null
+    setTrackingStarted(false);
+    setTrackingInfo(null);
+    setRouteData(null);
+    setSelectedCameras([]);
 
-      });
+  } catch (err) {
 
-      setSelectedCase(res);
-      setCases(prev => [res, ...prev]);
-      setHistoryMode(false);
+    console.error(err);
+    alert("Case creation failed");
 
-      setTrackingStarted(false);
-      setTrackingInfo(null);
-      setRouteData(null);
-      setSelectedCameras([]);
+  }
 
-    } catch (err) {
-
-      console.error(err);
-      alert("Case creation failed");
-
-    }
-
-  };
+};
 
   
 
@@ -854,9 +853,7 @@ View Sighting
 
 <h4>{i + 1}. {stop.camera_id} — {stop.location}</h4>
 
-<p>First Seen: {new Date(stop.first_seen).toLocaleString()}</p>
-
-<p>Detections: {stop.total_detections}</p>
+<p>First Detection: {new Date(stop.first_seen).toLocaleString()}</p>
 
 {stop.travel_minutes_from_previous && (
 
