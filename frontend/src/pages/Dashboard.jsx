@@ -46,7 +46,7 @@ export default function Dashboard() {
 
   const [autoSelected, setAutoSelected] = useState([]);
 
-  
+  const [radius, setRadius] = useState(3);
 
   const navigate = useNavigate();
 
@@ -241,6 +241,11 @@ export default function Dashboard() {
 
   if (!selectedCase) {
     alert("Create or select a case first");
+    return;
+  }
+
+  if (autoMode && autoSelected.length === 0) {
+    alert("Please run auto selection after adjusting radius");
     return;
   }
 
@@ -450,7 +455,7 @@ export default function Dashboard() {
       incident_location: locationInput
     });
 
-    const res = await apiRequest(`/tracking/auto-select/${selectedCase.id}`);
+    const res = await apiRequest(`/tracking/auto-select/${selectedCase.id}?radius_km=${radius}`);
 
   if (!res.selected_cameras || res.selected_cameras.length === 0) {
     alert("No nearby cameras found for this location");
@@ -469,6 +474,7 @@ export default function Dashboard() {
     setAutoLoading(false);
   }
 };
+
 
   /* UI */
 
@@ -721,23 +727,47 @@ onClick={() => openCase(c.id)}
 </button>
 
 {selectedCase?.incident_location && (
-  <p style={{ color: "green", marginTop: "5px" }}>
-    Location set: {selectedCase.incident_location}
-  </p>
+  <>
+    <p style={{ color: "green", marginTop: "5px" }}>
+      Location set: {selectedCase.incident_location}
+    </p>
+
+    {autoSelected.length > 0 && (
+      <p style={{ color: "green", marginTop: "5px" }}>
+        Cameras selected within {radius} km
+      </p>
+    )}
+  </>
 )}
+
+  </div>
+
+  
+)}
+{autoMode && selectedCase && (
+  <div className="radius-box">
+
+    <label style={{ fontSize: "13px" }}>
+      Search Radius: {radius} km
+    </label>
+
+    <input
+      type="range"
+      min="1"
+      max="10"
+      value={radius}
+      onChange={(e) => {
+        setRadius(Number(e.target.value));
+        setAutoSelected([]);
+        setSelectedCameras([]);
+      }}
+    />
 
   </div>
 )}
 
 
-
-
-
 <div className={`camera-section ${!selectedCase ? "disabled-section" : ""}`}>
-
- 
-
-
 
 <input
   className="field-input"

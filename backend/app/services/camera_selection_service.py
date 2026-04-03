@@ -17,12 +17,11 @@ def get_distance(lat1, lon1, lat2, lon2):
     return R * c
 
 
-def auto_select_cameras(incident_lat, incident_lon):
+def auto_select_cameras(incident_lat, incident_lon, radius_km=3):
     db = SessionLocal()
 
     try:
         cameras = db.query(Camera).all()
-
         selected = []
 
         for cam in cameras:
@@ -33,11 +32,10 @@ def auto_select_cameras(incident_lat, incident_lon):
                 cam.longitude
             )
 
-            if dist <= AUTO_SELECTION_RADIUS_KM:
+            if dist <= radius_km:
                 selected.append(cam.camera_id)
 
         selected.sort()
-
         return selected
 
     finally:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -19,7 +19,7 @@ class TrackingRequest(BaseModel):
 
 
 @router.get("/auto-select/{case_id}")
-def get_auto_selected_cameras(case_id: int):
+def get_auto_selected_cameras(case_id: int, radius_km: float = Query(3, ge=1, le=10)):
 
     db = SessionLocal()
 
@@ -36,10 +36,14 @@ def get_auto_selected_cameras(case_id: int):
 
         selected_ids = auto_select_cameras(
             case.incident_latitude,
-            case.incident_longitude
+            case.incident_longitude,
+            radius_km
         )
 
-        return {"selected_cameras": selected_ids}
+        return {
+            "selected_cameras": selected_ids,
+            "radius_used": radius_km
+        }
 
     finally:
         db.close()
@@ -81,7 +85,8 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
 
             selected_ids = auto_select_cameras(
                 case.incident_latitude,
-                case.incident_longitude
+                case.incident_longitude,
+                3 
             )
 
     finally:
@@ -91,22 +96,22 @@ def start_tracking_endpoint(payload: TrackingRequest, background_tasks: Backgrou
     all_videos = [
 
         ("data/videos/vv_IMG_1447.mp4", "CAM_001", datetime(2026, 2, 4, 8, 30, 0)),
-        ("data/videos/vv_IMG_1446.mp4", "CAM_002", datetime(2026, 2, 4, 9, 10, 0)),
-        ("data/videos/vv_IMG_1442.mp4", "CAM_003", datetime(2026, 2, 4, 9, 30, 0)),
-        ("data/videos/vv_IMG_1443.mp4", "CAM_004", datetime(2026, 2, 4, 10, 10, 0)),
+        ("data/videos/vv_IMG_1446.mp4", "CAM_002", datetime(2026, 2, 4, 8, 35, 0)),
+        ("data/videos/vv_IMG_1442.mp4", "CAM_003", datetime(2026, 2, 4, 8, 50, 0)),
+        ("data/videos/vv_IMG_1443.mp4", "CAM_004", datetime(2026, 2, 4, 9, 10, 0)),
 
-        ("data/videos/b_IMG_1365.mp4", "CAM_005", datetime(2026, 3, 2, 11, 10, 0)),
-        ("data/videos/b_IMG_1366.mp4", "CAM_008", datetime(2026, 3, 2, 11, 30, 0)),
-        ("data/videos/b_IMG_1367.mp4", "CAM_012", datetime(2026, 3, 2, 11, 40, 0)),
-        ("data/videos/b_IMG_1368.mp4", "CAM_016", datetime(2026, 3, 2, 11, 55, 0)),
-        ("data/videos/b_IMG_1370.mp4", "CAM_020", datetime(2026, 3, 2, 12, 10, 0)),
-        ("data/videos/b_IMG_1372.mp4", "CAM_024", datetime(2026, 3, 2, 12, 35, 0)),
+        ("data/videos/bn_IMG_1621.MP4", "CAM_005", datetime(2026, 3, 2, 11, 10, 0)),
+        ("data/videos/bb2_IMG_1613.MP4", "CAM_008", datetime(2026, 3, 2, 11, 30, 0)),
+        ("data/videos/bn_IMG_1623.MP4", "CAM_012", datetime(2026, 3, 2, 11, 40, 0)),
+        ("data/videos/bn_IMG_1624.MP4", "CAM_016", datetime(2026, 3, 2, 11, 55, 0)),
+        ("data/videos/IMG_1629.MP4", "CAM_020", datetime(2026, 3, 2, 12, 10, 0)),
+        ("data/videos/bb6_IMG_1609.MP4", "CAM_024", datetime(2026, 3, 2, 12, 35, 0)),
 
-        ("data/videos/t_IMG_1352.mp4", "CAM_006", datetime(2026, 3, 6, 13, 15, 0)),
-        ("data/videos/t_IMG_1353.mp4", "CAM_007", datetime(2026, 3, 6, 13, 45, 0)),
-        ("data/videos/t_IMG_1356.mp4", "CAM_009", datetime(2026, 3, 6, 14, 0, 0)),
-        ("data/videos/t_IMG_1360.mp4", "CAM_010", datetime(2026, 3, 6, 14, 20, 0)),
-        ("data/videos/t_IMG_1398.mp4", "CAM_011", datetime(2026, 3, 6, 15, 15, 0)),
+        ("data/videos/IMG_1615.MP4", "CAM_006", datetime(2026, 3, 6, 13, 15, 0)),
+        ("data/videos/IMG_1616.MP4", "CAM_007", datetime(2026, 3, 6, 13, 45, 0)),
+        ("data/videos/IMG_1617.MP4", "CAM_009", datetime(2026, 3, 6, 14, 0, 0)),
+        ("data/videos/IMG_1618.MP4", "CAM_010", datetime(2026, 3, 6, 14, 20, 0)),
+        ("data/videos/IMG_1619.MP4", "CAM_011", datetime(2026, 3, 6, 15, 15, 0)),
 
         ("data/videos/ss_IMG_1453.mp4", "CAM_013", datetime(2026, 6, 3, 12, 0, 0)),
         ("data/videos/ss_IMG_1455.mp4", "CAM_014", datetime(2026, 6, 3, 12, 20, 0)),

@@ -119,7 +119,21 @@ def process_video(
 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
+                h, w = frame.shape[:2]
+
+                #Skip invalid boxes
                 if x2 <= x1 or y2 <= y1:
+                    continue
+
+                # Skip vehicles touching frame borders (partial vehicles)
+                margin = 10  # pixels safety margin
+
+                if (
+                    x1 <= margin or
+                    y1 <= margin or
+                    x2 >= (w - margin) or
+                    y2 >= (h - margin)
+                ):
                     continue
 
                 
@@ -152,15 +166,15 @@ def process_video(
                         if plate_crop.size == 0:
                             continue
 
-                        # Upscale plate for better OCR
                         plate_crop = cv2.resize(
                             plate_crop,
                             None,
-                            fx=2,
-                            fy=2,
+                            fx=1.5,
+                            fy=1.5,
                             interpolation=cv2.INTER_CUBIC
                         )
 
+                        # ---- OCR ----
                         plate_text, plate_conf = extract_plate(plate_crop)
 
                         if plate_text is None or plate_conf is None:
@@ -198,16 +212,6 @@ def process_video(
                         bx1, by1, bx2, by2 = x1, y1, x2, y2
 
                         cv2.rectangle(frame_copy, (bx1, by1), (bx2, by2), (0, 255, 0), 2)
-
-                        cv2.putText(
-                            frame_copy,
-                            plate_text,
-                            (bx1, by1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            (0, 255, 0),
-                            2,
-                        )
 
                         vehicle_filename = f"vehicle_{case_id}_{camera_id}_{frame_count}.jpg"
                         vehicle_image_path = os.path.join(
