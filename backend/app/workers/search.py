@@ -1,3 +1,5 @@
+# NOTE: Reserved for future feature (vehicle search)
+
 from sqlalchemy.orm import Session
 from backend.app.models.sighting import VehicleSighting
 from backend.app.workers.plate_aggregator import normalize_plate

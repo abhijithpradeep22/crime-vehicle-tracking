@@ -16,13 +16,13 @@ from backend.app.workers.anpr import extract_plate
 from backend.app.workers.plate_aggregator import is_similar_plate, normalize_plate
 
 
-# ---------------- MODEL LOADING ---------------- #
+# MODEL LOADING 
 
-model = YOLO("yolov8n.pt")
-plate_model = YOLO("backend/app/models/license_plate_detector.pt")
+model = YOLO("backend/app/ml_models/yolov8n.pt")
+plate_model = YOLO("backend/app/ml_models/license_plate_detector.pt")
 
 
-# ---------------- CONFIG ---------------- #
+# CONFIG 
 
 VEHICLE_CLASSES = {2, 3, 5, 7}
 FRAME_SKIP = 3
@@ -34,7 +34,7 @@ last_seen_plates = {}
 last_tracking_update = {}
 
 
-# ---------------- MAIN PROCESS FUNCTION ---------------- #
+# ------ MAIN PROCESS FUNCTION 
 
 def process_video(
     video_path: str,
@@ -87,7 +87,7 @@ def process_video(
         frame_count += 1
         stop_check_counter += 1
 
-        # ---- CHECK IF USER STOPPED TRACKING ----
+        #  CHECK IF USER STOPPED TRACKING 
         if tracking_session_id and stop_check_counter % 30 == 0:
             session = db.query(TrackingSession).filter(
                 TrackingSession.id == tracking_session_id
@@ -174,7 +174,8 @@ def process_video(
                             interpolation=cv2.INTER_CUBIC
                         )
 
-                        # ---- OCR ----
+                        # OCR 
+
                         plate_text, plate_conf = extract_plate(plate_crop)
 
                         if plate_text is None or plate_conf is None:
@@ -251,7 +252,7 @@ def process_video(
 
                         db.add(sighting)
 
-                        # ---------- TRACKING UPDATE ----------
+                        # TRACKING UPDATE 
 
                         if tracking_session and is_similar_plate(
                             plate_text,
@@ -265,7 +266,7 @@ def process_video(
 
                             first_updated = False
 
-                            # FIRST detection
+                            # FIRST Detection
                             if (
                                 session_check.first_event_time is None
                                 or event_time < session_check.first_event_time
@@ -328,7 +329,7 @@ def process_video(
         except Exception:
             db.rollback()
 
-    # -------- CAMERA FINISHED -------- #
+    # CAMERA FINISHED 
 
     db.execute(
         text(

@@ -46,7 +46,7 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
 
     db: Session = SessionLocal()
 
-    # -------- Prevent duplicate sessions --------
+    # Prevent duplicate sessions 
     existing_session = db.query(TrackingSession).filter(
         TrackingSession.case_id == case_id
     ).first()
@@ -56,7 +56,7 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
         db.close()
         return existing_session.id
 
-    # -------- Create new tracking session --------
+    # Create new tracking session 
     session = TrackingSession(
         case_id=case_id,
         target_plate=target_plate,
@@ -77,7 +77,7 @@ def start_tracking(case_id: int, target_plate: str, videos: list):
 
     db.close()
 
-    # -------- Controlled parallel processing --------
+    # Controlled parallel processing 
     processes = []
     active_processes = []
 
